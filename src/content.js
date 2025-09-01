@@ -213,7 +213,13 @@
             maxScrollIterations: defaults.maxScrollIterations,
             redact: o.redact ?? defaults.redact,
             skipVideo: o.skipVideo ?? true,
-            denylist: Array.isArray(o.denylist) && o.denylist.length ? o.denylist : defaults.denylist,
+            // Respect an explicitly empty denylist. Previously, clearing the
+            // denylist in the options page would fall back to the built-in
+            // defaults because we checked for a non-zero length. This made it
+            // impossible for users to opt out of the default denylist.
+            // Accept any array (including empty) from storage and only fall
+            // back to defaults when the value is missing or invalid.
+            denylist: Array.isArray(o.denylist) ? o.denylist : defaults.denylist,
           });
         });
       } catch {
