@@ -647,6 +647,8 @@
 
     // Neutralize <base> tag which can break offline paths
     html = html.replace(/<base\b[^>]*>/i, '');
+    // Remove CSP meta tag to allow local asset loading
+    html = html.replace(/<meta[^>]+http-equiv=["']content-security-policy["'][^>]*>/gi, '');
 
     // src|href|poster
     html = html.replace(/\b(src|href|poster)=(["'])([^"']+)(\2)/gi, (m, a, q, u) => {
@@ -774,10 +776,10 @@
       <ul id="fails"></ul>
     </aside>
     <main>
-      <iframe src="index.html"></iframe>
+      <iframe src="./index.html"></iframe>
     </main>
     <script>
-      fetch('report/fetch-report.json').then(r => r.json()).then(r => {
+      fetch('./report/fetch-report.json').then(r => r.json()).then(r => {
         const s = r.stats || {};
         const ok = s.assetsDownloaded || 0;
         const fail = s.assetsFailed || 0;
