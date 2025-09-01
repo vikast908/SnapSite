@@ -34,7 +34,12 @@ startBtn.addEventListener('click', runCapture);
 stopBtn.addEventListener('click', async () => {
   currentTabId = await getActiveTabId();
   if (!currentTabId) return;
-  await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
+  try {
+    await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
+  } catch (e) {
+    setStatus('Error sending stop message: ' + String(e));
+    stopBtn.disabled = true;
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
