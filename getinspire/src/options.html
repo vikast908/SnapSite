@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>GetInspire Options</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; padding: 16px; max-width: 720px; }
+      label { display: block; margin-top: 12px; }
+      input[type=number] { width: 120px; }
+      textarea { width: 100%; height: 120px; font-family: ui-monospace, monospace; }
+      .row { margin: 8px 0; }
+    </style>
+  </head>
+  <body>
+    <h2>GetInspire Settings</h2>
+    <div class="row">
+      <label>Max runtime (seconds)
+        <input id="maxMillis" type="number" min="10" max="600" step="5" />
+      </label>
+    </div>
+    <div class="row">
+      <label>Max assets
+        <input id="maxAssets" type="number" min="100" max="20000" step="50" />
+      </label>
+    </div>
+    <div class="row">
+      <label>Max ZIP size (MB)
+        <input id="maxZipMB" type="number" min="50" max="4096" step="50" />
+      </label>
+    </div>
+    <div class="row">
+      <label>Concurrency (parallel downloads)
+        <input id="concurrency" type="number" min="1" max="32" step="1" />
+      </label>
+    </div>
+    <div class="row">
+      <label>Denylist (one regex per line)</label>
+      <textarea id="denylist"></textarea>
+    </div>
+    <div class="row">
+      <label>
+        <input id="redact" type="checkbox" /> Redact authenticated text
+      </label>
+    </div>
+    <div class="row">
+      <label>
+        <input id="saveWithoutPrompt" type="checkbox" /> Save ZIP without prompt
+      </label>
+    </div>
+    <div class="row">
+      <label>
+        <input id="skipVideo" type="checkbox" /> Skip video assets (audio allowed)
+      </label>
+    </div>
+    <div class="row">
+      <button id="saveBtn">Save</button>
+      <span id="saved" style="margin-left:8px;color:green;display:none;">Saved</span>
+    </div>
+    <script src="options.js"></script>
+  </body>
+  </html>

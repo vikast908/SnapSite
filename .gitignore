@@ -1,0 +1,16 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors/IDEs
+.idea/
+.vscode/
+
+# Archives
+*.zip
+
+# Node (not used yet, but common)
+node_modules/
+dist/
+build/
+

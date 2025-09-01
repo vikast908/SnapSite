@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>GetInspire</title>
+    <style>
+      body { font: 13px/1.4 system-ui, sans-serif; min-width: 300px; padding: 12px; }
+      button { padding: 8px 12px; margin-right: 8px; }
+      .row { margin: 4px 0; }
+      .status { margin-top: 8px; white-space: pre-wrap; min-height: 2em; }
+      small { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h3>GetInspire</h3>
+    <div class="row">
+      <button id="startBtn">Capture this page</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+    <div class="status" id="status">Idle</div>
+    <small id="hint">Scan → Scroll → Collect → Rewrite → Zip → Download</small>
+    <script src="popup.js"></script>
+  </body>
+  </html>
+

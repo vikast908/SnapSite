@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "GetInspire",
+  "version": "0.1.1",
+  "description": "Snapshot any finite web page into a local ZIP (index.html + assets). Detects endless pages and stops.",
+  "action": { "default_popup": "src/popup.html", "default_title": "GetInspire" },
+  "permissions": ["activeTab", "scripting", "downloads", "storage", "contextMenus"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "src/background.js", "type": "module" },
+  "options_page": "src/options.html",
+  "icons": {
+    "16": "assets/icons/16.png",
+    "32": "assets/icons/32.png",
+    "48": "assets/icons/48.png",
+    "128": "assets/icons/128.png"
+  }
+}
