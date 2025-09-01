@@ -8,7 +8,7 @@ const els = {
   saveWithoutPrompt: document.getElementById('saveWithoutPrompt'),
   skipVideo: document.getElementById('skipVideo'),
   saveBtn: document.getElementById('saveBtn'),
-  saved: document.getElementById('saved')
+  saved: document.getElementById('saved'),
 };
 
 const defaults = {
@@ -22,7 +22,9 @@ const defaults = {
   denylist: [
     String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
     String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
-    String(/https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i),
+    String(
+      /https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i,
+    ),
     String(/https?:\/\/([^\/]+\.)?(reddit\.com)\//i),
     String(/https?:\/\/([^\/]+\.)?linkedin\.com\/feed/i),
     String(/https?:\/\/([^\/]+\.)?pinterest\.[^\/]+\//i),
@@ -30,21 +32,26 @@ const defaults = {
     String(/https?:\/\/news\.google\.com\//i),
     String(/https?:\/\/([^\/]+\.)?quora\.com\//i),
     String(/https?:\/\/([^\/]+\.)?youtube\.com\/feed\//i),
-    String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i)
-  ]
+    String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i),
+  ],
 };
 
 function load() {
   chrome.storage.sync.get('getinspireOptions', (obj) => {
     const v = obj.getinspireOptions || defaults;
-    els.maxMillis.value = Math.floor((v.maxMillis ?? defaults.maxMillis) / 1000);
+    els.maxMillis.value = Math.floor(
+      (v.maxMillis ?? defaults.maxMillis) / 1000,
+    );
     els.maxAssets.value = v.maxAssets ?? defaults.maxAssets;
     els.maxZipMB.value = v.maxZipMB ?? defaults.maxZipMB;
     els.concurrency.value = v.concurrency ?? defaults.concurrency;
     els.redact.checked = v.redact ?? defaults.redact;
-    els.saveWithoutPrompt.checked = v.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
+    els.saveWithoutPrompt.checked =
+      v.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
     els.skipVideo.checked = v.skipVideo ?? defaults.skipVideo;
-    const list = (v.denylist ?? defaults.denylist).map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
+    const list = (v.denylist ?? defaults.denylist)
+      .map((s) => s.replace(/^\/(.*)\/i$/, '/$1/i'))
+      .join('\n');
     els.denylist.value = list;
   });
 }
