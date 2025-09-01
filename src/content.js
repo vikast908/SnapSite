@@ -501,10 +501,22 @@
         } catch (e) { console.error(e); }
     }));
 
-    // Preload links for styles/scripts/fonts/images
-    document.querySelectorAll('link[rel="preload"][as][href]').forEach(el => {
+    // Preload links for styles/scripts/fonts/images/modules
+    document.querySelectorAll('link[rel="preload"][as][href], link[rel="modulepreload"][href]').forEach(el => {
       const as = (el.getAttribute('as')||'').toLowerCase();
-      if (['style','script','font','image','fetch'].includes(as)) add(el.getAttribute('href'));
+      if (['style','script','font','image','fetch',''].includes(as)) add(el.getAttribute('href'));
+    });
+
+    // Canonical README/Markdown images
+    document.querySelectorAll('img[data-canonical-src]').forEach(el => { const u = el.getAttribute('data-canonical-src'); if (u) add(u); });
+
+    // CurrentSrc of images (selected candidate from srcset/picture)
+    document.querySelectorAll('img').forEach(im => { try { if (im.currentSrc && !im.currentSrc.startsWith('data:')) add(im.currentSrc); } catch {} });
+
+    // External SVG sprite references via <use>
+    document.querySelectorAll('use[href], use[xlink\:href]').forEach(u => {
+      const val = u.getAttribute('href') || u.getAttribute('xlink:href');
+      if (!val) return; if (val.startsWith('#')) return; add(val);
     });
 
     const html = '<!doctype html>\n' + document.documentElement.outerHTML;
@@ -705,13 +717,27 @@
     html = html.replace(/<base\b[^>]*>/i, '');
     // Remove CSP meta tag to allow local asset loading
     html = html.replace(/<meta[^>]+http-equiv=["']content-security-policy["'][^>]*>/gi, '');
+    // Remove attributes that block local loading
+    html = html.replace(/\s(integrity|crossorigin|referrerpolicy|nonce)=(["'][^"']*["']|[^\s>]+)/gi, '');
+    // Convert rel=preload as=style to rel=stylesheet so CSS applies offline
+    html = html.replace(/<link\b([^>]*\brel=(["'])preload\2[^>]*\bas=(["'])style\3[^>]*?)>/gi, (m, attrs) => {
+      let a = attrs
+        .replace(/\brel=(["'])preload\1/i, 'rel="stylesheet"')
+        .replace(/\bas=(["'])style\1/i, '')
+        .replace(/\bonload=(["'])[\s\S]*?\1/gi, '')
+        .replace(/\bmedia=(["'])print\1/gi, 'media="all"');
+      a = a.replace(/\s(integrity|crossorigin|referrerpolicy|nonce)=(["'][^"']*["']|[^\s>]+)/gi, '');
+      return `<link ${a}>`;
+    });
 
-    // src|href|poster
+    // src|href|poster (preserve fragments like #icon)
     html = html.replace(/\b(src|href|poster)=(["'])([^"']+)(\2)/gi, (m, a, q, u) => {
       try {
         const abs = new URL(u, base).href;
         const entry = map.get(abs);
-        return `${a}=${q}${entry ? entry.path : u}${q}`;
+        if (!entry) return m;
+        const hash = u.includes('#') ? u.slice(u.indexOf('#')) : '';
+        return `${a}=${q}${entry.path}${hash}${q}`;
       } catch { return m; }
     });
 
@@ -742,6 +768,12 @@
       return `style=${q}${rewritten}${q}`;
     });
 
+    // Additional safety CSS (responsive images, hide sr-only) when enabled
+    if (opts.fontFallback) {
+      const safetyCss = `\n<style id="getinspire-safety">img{max-width:100%;height:auto}.sr-only,.sr-only-focusable:not(:focus){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>`;
+      html = html.replace(/<head\b[^>]*>/i, (m) => m + safetyCss);
+    }
+
     // Add optional font fallback for better symbol rendering (₹ etc.)
     if (opts.fontFallback) {
       const fallbackCss = `\n<style id="getinspire-font-fallback">\n  @font-face {\n    font-family: "GetInspireSymbolFallback";\n    src: local("Nirmala UI"), local("Segoe UI Symbol"), local("Arial Unicode MS"), local("DejaVu Sans"), local("Noto Sans"), local("Noto Sans Symbols");\n    unicode-range: U+20A0-20CF; /* currency block includes ₹ */\n    font-display: swap;\n  }\n  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', 'Helvetica Neue', Arial, 'GetInspireSymbolFallback', 'Noto Color Emoji', 'Segoe UI Emoji', sans-serif; }\n</style>`;
@@ -768,6 +800,24 @@
           } catch { return mm; }
         });
       return `<style${attrs}>${css1}</style>`;
+    });
+
+    // Prefer canonical README image sources when available
+    html = html.replace(/<img\b([^>]*?data-canonical-src=(["'])([^"']+)\2[^>]*)>/gi, (m, attrs, q, val) => {
+      try {
+        const abs = new URL(val, base).href; const entry = map.get(abs); if (!entry) return m;
+        if (/\bsrc=(["'])([^"']+)\1/i.test(attrs)) return m.replace(/\bsrc=(["'])([^"']+)\1/i, `src="${entry.path}"`);
+        return m.replace(/<img\b/, `<img src="${entry.path}" `);
+      } catch { return m; }
+    });
+
+    // Rewrite external SVG sprite references in <use>
+    html = html.replace(/<use\b([^>]*?(?:xlink:href|href)=(["'])([^"']+)\2[^>]*)>/gi, (m, attrs, q, val) => {
+      try {
+        const abs = new URL(val, base).href; const entry = map.get(abs); if (!entry) return m;
+        const hash = val.includes('#') ? val.slice(val.indexOf('#')) : '';
+        return `<use ${attrs.replace(/(?:xlink:href|href)=(["'])([^"']+)\1/i, `href="${entry.path}${hash}"`)}>`;
+      } catch { return m; }
     });
 
     // Replace third-party iframes with downloaded thumbnails where available
