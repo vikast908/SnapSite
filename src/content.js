@@ -33,6 +33,9 @@
     report: baseReport(),
   };
 
+  // Options loaded at runtime, available to helpers via closure
+  let options;
+
   const sendStatus = (text) => chrome.runtime.sendMessage({ type: 'GETINSPIRE_STATUS', text }).catch(() => {});
   const fail = (msg) => {
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: msg }).catch(() => {});
@@ -52,9 +55,7 @@
 
   ;(async function main() {
     if (!window.JSZip) return fail('Internal error: ZIP library missing.');
-    const options = await loadOptions();
-    // expose for collection helpers
-    window.__GETINSPIRE_OPTIONS__ = options;
+    options = await loadOptions();
     const denylistRe = compileDenylist(options.denylist);
 
     // Denylist gate
@@ -413,7 +414,7 @@
     document.querySelectorAll('img[src], script[src], audio[src], video[src], track[src], source[src]').forEach(el => {
       const tag = el.tagName;
       if (tag === 'IFRAME') return;
-      if ((tag === 'VIDEO' || (tag === 'SOURCE' && el.closest('video')) || (tag === 'TRACK' && el.closest('video'))) && (window.__GETINSPIRE_OPTIONS__?.skipVideo ?? true)) {
+      if ((tag === 'VIDEO' || (tag === 'SOURCE' && el.closest('video')) || (tag === 'TRACK' && el.closest('video'))) && (options?.skipVideo ?? true)) {
         const u = el.getAttribute('src');
         if (u) skipped.push({ url: new URL(u, document.baseURI).href, reason: 'video' });
         return;
@@ -517,7 +518,7 @@
         let controller = null; let toId = null;
         try {
           // Skip video assets if configured or detected
-          if ((window.__GETINSPIRE_OPTIONS__?.skipVideo ?? true) && isVideoUrl(url)) {
+          if ((options?.skipVideo ?? true) && isVideoUrl(url)) {
             state.report.skipped.push({ url, reason: 'video' });
             skipCount++;
             return resolve();
