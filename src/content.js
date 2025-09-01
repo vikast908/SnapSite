@@ -1,31 +1,9 @@
-(() => {
+;(async () => {
   if (window.__GETINSPIRE_RUNNING__) return;
   window.__GETINSPIRE_RUNNING__ = true;
 
   // --- defaults, can be overridden from options ---
-  const defaults = {
-    maxMillis: 90_000,
-    maxAssets: 2500,
-    maxZipMB: 750,
-    concurrency: 8,
-    requestTimeoutMs: 20000,
-    scrollIdleMs: 2000,
-    maxScrollIterations: 200,
-    redact: true,
-    denylist: [
-      String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
-      String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
-      String(/https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i),
-      String(/https?:\/\/([^\/]+\.)?(reddit\.com)\//i),
-      String(/https?:\/\/([^\/]+\.)?linkedin\.com\/feed/i),
-      String(/https?:\/\/([^\/]+\.)?pinterest\.[^\/]+\//i),
-      String(/https?:\/\/([^\/]+\.)?medium\.com\/$/i),
-      String(/https?:\/\/news\.google\.com\//i),
-      String(/https?:\/\/([^\/]+\.)?quora\.com\//i),
-      String(/https?:\/\/([^\/]+\.)?youtube\.com\/feed\//i),
-      String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i)
-    ],
-  };
+  const { defaults } = await import(chrome.runtime.getURL('src/defaults.js'));
 
   const state = {
     stopped: false,
@@ -218,7 +196,7 @@
             scrollIdleMs: defaults.scrollIdleMs,
             maxScrollIterations: defaults.maxScrollIterations,
             redact: o.redact ?? defaults.redact,
-            skipVideo: o.skipVideo ?? true,
+            skipVideo: o.skipVideo ?? defaults.skipVideo,
             // Respect an explicitly empty denylist. Previously, clearing the
             // denylist in the options page would fall back to the built-in
             // defaults because we checked for a non-zero length. This made it
