@@ -35,6 +35,7 @@
     redact: document.getElementById('redact'),
     saveWithoutPrompt: document.getElementById('saveWithoutPrompt'),
     skipVideo: document.getElementById('skipVideo'),
+    stripScripts: document.getElementById('stripScripts'),
     saveBtn: document.getElementById('saveBtn'),
     saved: document.getElementById('saved')
   };
@@ -49,6 +50,7 @@
       els.redact.checked = v.redact ?? defaults.redact;
       els.saveWithoutPrompt.checked = v.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
       els.skipVideo.checked = v.skipVideo ?? defaults.skipVideo;
+      els.stripScripts.checked = v.stripScripts ?? defaults.stripScripts;
       const list = (Array.isArray(v.denylist) ? v.denylist : defaults.denylist)
         .map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
       els.denylist.value = list;
@@ -74,6 +76,7 @@
       redact: Boolean(els.redact.checked),
       saveWithoutPrompt: Boolean(els.saveWithoutPrompt.checked),
       skipVideo: Boolean(els.skipVideo.checked),
+      stripScripts: Boolean(els.stripScripts.checked),
       denylist: deny
     };
 

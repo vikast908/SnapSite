@@ -124,19 +124,35 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) });
     }
   }
+  // Save current tab as MHTML and reply with ArrayBuffer
+  if (msg?.type === 'GETINSPIRE_MHTML') {
+    try {
+      const tabId = sender?.tab?.id;
+      if (!tabId) throw new Error('no-tab');
+      const blob = await chrome.pageCapture.saveAsMHTML({ tabId });
+      const ab = await blob.arrayBuffer();
+      chrome.tabs.sendMessage(tabId, { type: 'GETINSPIRE_MHTML_RESULT', id: msg.id, ok: true, arrayBuffer: ab });
+    } catch (e) {
+      try { chrome.tabs.sendMessage(sender?.tab?.id, { type: 'GETINSPIRE_MHTML_RESULT', id: msg.id, ok: false, error: String(e) }); } catch (e2) { console.error(e2); }
+    }
+    return;
+  }
 });
 
 // Keyboard shortcut: Capture via command
 try {
   chrome.commands.onCommand.addListener(async (command) => {
-    if (command !== 'capture-page') return;
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) return;
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['src/vendor/jszip.min.js', 'src/content.js']
-      });
+      if (command === 'capture-page') {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['src/vendor/jszip.min.js', 'src/content.js']
+        });
+      } else if (command === 'stop-capture') {
+        try { await chrome.tabs.sendMessage(tab.id, { type: 'GETINSPIRE_STOP' }); } catch {}
+      }
     } catch (e) {
       try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) }); } catch {}
     }

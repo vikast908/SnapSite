@@ -13,8 +13,12 @@
 
   // Options loaded at runtime, available to helpers via closure
   let options;
+  let overlay = null;
 
-  const sendStatus = (text) => chrome.runtime.sendMessage({ type: 'GETINSPIRE_STATUS', text }).catch(() => {});
+  const sendStatus = (text) => {
+    try { if (overlay) overlay.setStatus(text); } catch {}
+    chrome.runtime.sendMessage({ type: 'GETINSPIRE_STATUS', text }).catch(() => {});
+  };
   const fail = (msg) => {
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: msg }).catch(() => {});
     cleanup();
@@ -27,12 +31,14 @@
   const cleanup = () => {
     chrome.runtime.onMessage.removeListener(onRuntimeMessage);
     window.__GETINSPIRE_RUNNING__ = false;
+    try { if (overlay) overlay.remove(); } catch {}
   };
 
   chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
   ;(async function main() {
     if (!window.JSZip) return fail('Internal error: ZIP library missing.');
+    overlay = createOverlay();
     options = await loadOptions();
     const denylistRe = compileDenylist(options.denylist);
 
@@ -84,6 +90,7 @@
     const totalAssets = collected.urls.size;
     sendStatus(`Downloading ${totalAssets} assets...`);
     try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: 0, total: totalAssets }); } catch (e) { console.error(e); }
+    try { if (overlay) overlay.setProgress(0, totalAssets); } catch {}
     const dres = await downloadAllAssets(collected.urls, {
       concurrency: options.concurrency,
       maxAssets: options.maxAssets,
@@ -91,6 +98,7 @@
       started: state.started,
       maxMillis: options.maxMillis,
       requestTimeoutMs: defaults.requestTimeoutMs,
+      onProgress: (done, total) => { try { if (overlay) overlay.setProgress(done, total); } catch {} }
     });
     if (dres.stopReason) {
       const reason = dres.stopReason;
@@ -110,13 +118,19 @@
 
     // Rewrite HTML and CSS to local paths
     sendStatus('Rewriting HTML & CSS...');
-    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts);
+    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts, { stripScripts: options.stripScripts });
 
     // Assemble report content
     state.report.pageUrl = location.href;
     state.report.capturedAt = new Date().toISOString();
     state.report.stats.durationMs = Date.now() - state.started;
     state.report.notes.push('Third-party iframes left as-is; may not work offline');
+    state.report.stats.coveragePct = totalAssets ? Math.round((dres.successCount * 100) / totalAssets) : 100;
+
+    // Build manifest and optionally include MHTML snapshot (if permitted)
+    const manifest = buildAssetManifest(dres.map);
+    let mhtmlAb = null;
+    try { mhtmlAb = await getMHTML(8000).catch(() => null); } catch {}
 
     // Build ZIP with two-pass to embed accurate report size
     sendStatus('Packing ZIP...');
@@ -126,6 +140,10 @@
       reportJson: JSON.stringify(state.report, null, 2),
       readmeMd: buildReadme(state.report),
       quickCheckHtml: quickCheckHtml(state.report),
+      extras: [
+        { path: 'report/asset-manifest.json', type: 'text', data: JSON.stringify(manifest, null, 2) },
+        ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'arrayBuffer', data: mhtmlAb }] : [])
+      ],
       sizeCap: options.maxZipMB * 1024 * 1024,
     });
     state.report.stats.zipBytes = blob1.size;
@@ -137,6 +155,10 @@
       reportJson: JSON.stringify(state.report, null, 2),
       readmeMd: buildReadme(state.report),
       quickCheckHtml: quickCheckHtml(state.report),
+      extras: [
+        { path: 'report/asset-manifest.json', type: 'text', data: JSON.stringify(manifest, null, 2) },
+        ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'arrayBuffer', data: mhtmlAb }] : [])
+      ],
       sizeCap: options.maxZipMB * 1024 * 1024,
     });
 
@@ -164,6 +186,7 @@
         assetsDownloaded: 0,
         assetsFailed: 0,
         assetsSkipped: 0,
+        coveragePct: 0,
         zipBytes: 0,
         durationMs: 0
       },
@@ -517,32 +540,35 @@
             if (!fetched) throw new Error('Failed to fetch');
             const { blob, mime } = fetched;
             const bytes = blob.size || 0;
+            const sha256 = await sha256Base64(blob).catch(() => null);
             const ext = extFromUrlOrMime(url, mime);
             const base = safeBaseName(url);
             const filename = dedupe(`${base}${ext}`);
             const path = `assets/${filename}`;
             totalBytes += bytes;
             if (totalBytes > cfg.maxZipBytes) { markStop('zip-too-large'); throw new Error('zip-too-large'); }
-            map.set(url, { path, mime, bytes, blob, isCss: mime.startsWith('text/css') || url.endsWith('.css') });
+            map.set(url, { path, mime, bytes, blob, sha256, isCss: mime.startsWith('text/css') || url.endsWith('.css') });
             return resolve();
           }
           if (!res.ok) throw new Error(String(res.status || 'fetch-failed'));
           const blob = await res.blob();
           const bytes = blob.size || 0;
           const mime = blob.type || 'application/octet-stream';
+          const sha256 = await sha256Base64(blob).catch(() => null);
           const ext = extFromUrlOrMime(url, mime);
           const base = safeBaseName(url);
           const filename = dedupe(`${base}${ext}`);
           const path = `assets/${filename}`;
           totalBytes += bytes;
           if (totalBytes > cfg.maxZipBytes) { markStop('zip-too-large'); throw new Error('zip-too-large'); }
-          map.set(url, { path, mime, bytes, blob, isCss: mime.startsWith('text/css') || url.endsWith('.css') });
+          map.set(url, { path, mime, bytes, blob, sha256, isCss: mime.startsWith('text/css') || url.endsWith('.css') });
         } catch (e) {
           const reason = String(e?.message || e);
           failures.push({ url, status: parseInt(reason) || 0, reason });
         } finally {
           inFlight--;
             try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: (map.size + failures.length + skipCount), total: queue.length }); } catch (e) { console.error(e); }
+            try { if (cfg?.onProgress) cfg.onProgress((map.size + failures.length + skipCount), queue.length); } catch {}
             try { if (toId) clearTimeout(toId); } catch (e) { console.error(e); }
             try { if (controller) controllers.delete(controller); } catch (e) { console.error(e); }
           resolve();
@@ -633,7 +659,7 @@
     return url.replace(/[^a-z0-9]+/gi, '-').slice(0, 80) || 'asset';
   }
 
-  async function rewriteHtmlAndCss(html, map, inlineCssTexts) {
+  async function rewriteHtmlAndCss(html, map, inlineCssTexts, opts = {}) {
     // Rewrites only when a URL exists in map; leaves others untouched.
     const base = document.baseURI;
 
@@ -700,6 +726,13 @@
       return `<style${attrs}>${css1}</style>`;
     });
 
+    // Optionally strip scripts and inline handlers for offline safety
+    if (opts.stripScripts) {
+      html = html.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+      html = html.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+      html = html.replace(/\bhref\s*=\s*(["']?)javascript:[^"'>\s]+\1/gi, 'href="#"');
+    }
+
     // Downloaded CSS files: rewrite their contents
     for (const [origUrl, info] of map) {
       if (info.isCss) {
@@ -728,12 +761,19 @@
     return html;
   }
 
-  async function buildZip({ indexHtml, assets, reportJson, readmeMd, quickCheckHtml, sizeCap }) {
+  async function buildZip({ indexHtml, assets, reportJson, readmeMd, quickCheckHtml, extras = [], sizeCap }) {
     const zip = new window.JSZip();
     zip.file('index.html', indexHtml);
     zip.file('quick-check.html', quickCheckHtml);
     zip.file('report/README.md', readmeMd);
     zip.file('report/fetch-report.json', reportJson);
+    for (const ex of extras) {
+      try {
+        if (ex.type === 'text') zip.file(ex.path, ex.data);
+        else if (ex.type === 'arrayBuffer') zip.file(ex.path, ex.data);
+        else if (ex.type === 'blob') zip.file(ex.path, ex.data);
+      } catch (e) { console.error(e); }
+    }
     for (const [_, entry] of assets) {
       zip.file(entry.path, entry.blob);
     }
@@ -797,6 +837,7 @@
           '<div><b>URL:</b> <code>' + (r.pageUrl||'') + '</code></div>' +
           '<div><b>Captured:</b> ' + (r.capturedAt||'') + '</div>' +
           '<div><b>Assets:</b> ' + ok + ' ok, ' + fail + ' failed, ' + skip + ' skipped</div>' +
+          (s.coveragePct != null ? ('<div><b>Coverage:</b> ' + s.coveragePct + '%</div>') : '') +
           '<div><b>ZIP:</b> ' + (s.zipBytes||0) + ' bytes</div>' +
           '<div><b>Notes:</b> ' + (r.notes||[]).join('; ') + '</div>';
         const ul = document.getElementById('fails');
@@ -823,6 +864,7 @@
     lines.push(`- Downloaded: ${report.stats.assetsDownloaded}`);
     lines.push(`- Failed: ${report.stats.assetsFailed}`);
     lines.push(`- Skipped: ${report.stats.assetsSkipped}`);
+    if (report.stats.coveragePct != null) lines.push(`- Coverage: ${report.stats.coveragePct}%`);
     lines.push(`- ZIP bytes: ${report.stats.zipBytes}`);
     lines.push(`- Duration ms: ${report.stats.durationMs}`);
     lines.push('');
@@ -845,6 +887,64 @@
     lines.push('- Back-end APIs are not mirrored.');
     lines.push('- Infinite feeds are blocked or timed out by heuristic.');
     return lines.join('\n');
+  }
+
+  // ---- helpers: digest, manifest, overlay, mhtml ----
+  async function sha256Base64(blob) {
+    const buf = await blob.arrayBuffer();
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    let binary = '';
+    const bytes = new Uint8Array(hash);
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return 'sha256-' + btoa(binary);
+  }
+
+  function buildAssetManifest(map) {
+    const out = { generatedAt: new Date().toISOString(), assets: [] };
+    for (const [url, info] of map) out.assets.push({ url, path: info.path, bytes: info.bytes, mime: info.mime, sha256: info.sha256 || null });
+    return out;
+  }
+
+  function createOverlay() {
+    try {
+      const root = document.createElement('div');
+      root.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:rgba(0,0,0,0.8);color:#fff;padding:8px 10px;border-radius:8px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,0.4);min-width:200px;pointer-events:auto;';
+      root.innerHTML = '<div id="gi-status">Starting...</div><div style="margin-top:6px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="gi-bar" style="height:100%;width:0%;background:#3b82f6;transition:width .2s ease"></div></div><div style="margin-top:6px;text-align:right"><button id="gi-stop" style="background:#ef4444;color:#fff;border:0;border-radius:4px;padding:4px 8px;cursor:pointer">Stop</button></div>';
+      document.documentElement.appendChild(root);
+      const statusEl = root.querySelector('#gi-status');
+      const barEl = root.querySelector('#gi-bar');
+      const stopBtn = root.querySelector('#gi-stop');
+      stopBtn.addEventListener('click', () => {
+        try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_STOP' }); } catch {}
+        stopBtn.disabled = true;
+      });
+      return {
+        setStatus(s){ if (statusEl) statusEl.textContent = s; },
+        setProgress(done,total){ total=Math.max(1,Number(total)||1); done=Math.max(0,Math.min(total,Number(done)||0)); const pct = Math.floor((done*100)/total); if (barEl) barEl.style.width = Math.min(99,pct)+'%'; },
+        remove(){ try { root.remove(); } catch {} }
+      };
+    } catch { return { setStatus(){}, setProgress(){}, remove(){} }; }
+  }
+
+  function getMHTML(timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+      try {
+        const id = Math.random().toString(36).slice(2);
+        const onMsg = (msg) => {
+          if (msg?.type === 'GETINSPIRE_MHTML_RESULT' && msg.id === id) {
+            try { chrome.runtime.onMessage.removeListener(onMsg); } catch {}
+            if (!msg.ok) return reject(new Error(msg.error || 'mhtml-failed'));
+            resolve(msg.arrayBuffer);
+          }
+        };
+        chrome.runtime.onMessage.addListener(onMsg);
+        chrome.runtime.sendMessage({ type: 'GETINSPIRE_MHTML', id }).catch(err => {
+          try { chrome.runtime.onMessage.removeListener(onMsg); } catch {}
+          reject(err);
+        });
+        setTimeout(() => { try { chrome.runtime.onMessage.removeListener(onMsg); } catch {}; reject(new Error('mhtml-timeout')); }, timeoutMs);
+      } catch (e) { reject(e); }
+    });
   }
 
 })();

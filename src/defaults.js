@@ -9,6 +9,7 @@ export const defaults = {
   redact: true,
   saveWithoutPrompt: false,
   skipVideo: true,
+  stripScripts: false,
   denylist: [
     String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
     String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),

@@ -18,6 +18,8 @@ What's Included
 - `assets/`: downloaded CSS/JS/images/fonts/media
 - `report/README.md` and `report/fetch-report.json`: human + machine summary
 - `quick-check.html`: loads `index.html` in an iframe and summarizes the report
+ - `report/asset-manifest.json`: original URL → local path, bytes, mime, sha256
+ - `report/page.mhtml`: browser-native MHTML snapshot (when available)
 
 Endless Pages & Limits
 - Denylist blocks known infinite feeds/search pages
@@ -27,6 +29,7 @@ Endless Pages & Limits
 Settings
 - Options page lets you adjust caps, redact behavior, denylist, and whether to save without prompt
  - Defaults are shared across the extension; the Options page imports them from `src/defaults.js`.
+ - Strip Scripts: optionally remove scripts and inline handlers for offline safety.
 
 Permissions
 - The extension requests per-origin host access only when needed to fetch cross-origin assets in the background. Chrome may prompt you the first time an asset needs fetching from a new domain.
@@ -35,4 +38,5 @@ Permissions
 Notes
 - Third-party iframes stay external by design and may not work offline
 - Cross-origin assets can be blocked by CORS/CSP; failures are listed in the report
- - The popup shows live progress during capture
+- The popup shows live progress during capture
+ - In-page overlay shows status with a Stop button during capture

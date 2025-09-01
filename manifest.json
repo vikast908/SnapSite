@@ -4,7 +4,7 @@
   "version": "0.1.1",
   "description": "Snapshot any finite web page into a local ZIP (index.html + assets). Detects endless pages and stops.",
   "action": { "default_popup": "src/popup.html", "default_title": "GetInspire" },
-  "permissions": ["activeTab", "scripting", "downloads", "storage", "contextMenus"],
+  "permissions": ["activeTab", "scripting", "downloads", "storage", "contextMenus", "pageCapture"],
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "src/background.js", "type": "module" },
   "options_page": "src/options.html",
@@ -14,6 +14,12 @@
         "default": "Ctrl+Shift+S"
       },
       "description": "GetInspire: Capture this page"
+    },
+    "stop-capture": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+X"
+      },
+      "description": "GetInspire: Stop capture"
     }
   },
   "icons": {
