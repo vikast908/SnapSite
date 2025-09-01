@@ -39,11 +39,16 @@
     cleanup();
     throw new Error(msg);
   };
-  const cleanup = () => { window.__GETINSPIRE_RUNNING__ = false; };
-
-  chrome.runtime.onMessage.addListener((msg) => {
+  const onRuntimeMessage = (msg) => {
     if (msg?.type === 'GETINSPIRE_STOP') state.stopped = true;
-  });
+  };
+
+  const cleanup = () => {
+    chrome.runtime.onMessage.removeListener(onRuntimeMessage);
+    window.__GETINSPIRE_RUNNING__ = false;
+  };
+
+  chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
   ;(async function main() {
     if (!window.JSZip) return fail('Internal error: ZIP library missing.');
