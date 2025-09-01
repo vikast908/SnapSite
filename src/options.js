@@ -10,7 +10,9 @@
     maxScrollIterations: 200,
     redact: true,
     saveWithoutPrompt: false,
-    skipVideo: true,
+    skipVideo: false,
+    replaceIframesWithPoster: true,
+    stripScripts: false,
     denylist: [
       String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
       String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
@@ -35,6 +37,7 @@
     redact: document.getElementById('redact'),
     saveWithoutPrompt: document.getElementById('saveWithoutPrompt'),
     skipVideo: document.getElementById('skipVideo'),
+    replaceIframesWithPoster: document.getElementById('replaceIframesWithPoster'),
     stripScripts: document.getElementById('stripScripts'),
     saveBtn: document.getElementById('saveBtn'),
     saved: document.getElementById('saved')
@@ -50,6 +53,7 @@
       els.redact.checked = v.redact ?? defaults.redact;
       els.saveWithoutPrompt.checked = v.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
       els.skipVideo.checked = v.skipVideo ?? defaults.skipVideo;
+      els.replaceIframesWithPoster.checked = v.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster;
       els.stripScripts.checked = v.stripScripts ?? defaults.stripScripts;
       const list = (Array.isArray(v.denylist) ? v.denylist : defaults.denylist)
         .map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
@@ -76,6 +80,7 @@
       redact: Boolean(els.redact.checked),
       saveWithoutPrompt: Boolean(els.saveWithoutPrompt.checked),
       skipVideo: Boolean(els.skipVideo.checked),
+      replaceIframesWithPoster: Boolean(els.replaceIframesWithPoster.checked),
       stripScripts: Boolean(els.stripScripts.checked),
       denylist: deny
     };

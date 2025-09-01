@@ -8,8 +8,11 @@ export const defaults = {
   maxScrollIterations: 200,
   redact: true,
   saveWithoutPrompt: false,
-  skipVideo: true,
+  skipVideo: false,
+  replaceIframesWithPoster: true,
   stripScripts: false,
+  fontFallback: true,
+  showOverlay: false,
   denylist: [
     String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
     String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),

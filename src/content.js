@@ -38,8 +38,8 @@
 
   ;(async function main() {
     if (!window.JSZip) return fail('Internal error: ZIP library missing.');
-    overlay = createOverlay();
     options = await loadOptions();
+    if (options.showOverlay) overlay = createOverlay();
     const denylistRe = compileDenylist(options.denylist);
 
     // Denylist gate
@@ -66,11 +66,17 @@
 
     if (state.stopped) return fail('Stopped by user.');
 
+    // Normalize lazy media and stabilize carousels before we snapshot
+    try {
+      sendStatus('Normalizing lazy media & carousels...');
+      await normalizePageForSnapshot({ includeVideo: !options.skipVideo });
+    } catch (e) { console.error(e); }
+
     // Redaction happens on cloned snapshot below (not mutating live DOM)
 
     // Collect assets & initial HTML snapshot
     sendStatus('Collecting assets...');
-    const collected = await collectPageAssets();
+    const collected = await collectPageAssets({ replaceIframesWithPoster: options.replaceIframesWithPoster });
     state.report.skipped.push(...collected.skipped);
     state.report.stats.assetsSkipped = state.report.skipped.length;
     if (state.stopped) return fail('Stopped by user.');
@@ -118,7 +124,7 @@
 
     // Rewrite HTML and CSS to local paths
     sendStatus('Rewriting HTML & CSS...');
-    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts, { stripScripts: options.stripScripts });
+    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts, { stripScripts: options.stripScripts, iframeRepls: collected.iframeRepls || [], fontFallback: options.fontFallback });
 
     // Assemble report content
     state.report.pageUrl = location.href;
@@ -220,6 +226,10 @@
             maxScrollIterations: defaults.maxScrollIterations,
             redact: o.redact ?? defaults.redact,
             skipVideo: o.skipVideo ?? defaults.skipVideo,
+            stripScripts: o.stripScripts ?? defaults.stripScripts,
+            fontFallback: o.fontFallback ?? defaults.fontFallback,
+            showOverlay: o.showOverlay ?? defaults.showOverlay,
+            replaceIframesWithPoster: o.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster,
             // Respect an explicitly empty denylist. Previously, clearing the
             // denylist in the options page would fall back to the built-in
             // defaults because we checked for a non-zero length. This made it
@@ -397,10 +407,11 @@
   }
   function cssEscape(s) { return String(s).replace(/[^a-z0-9_-]/gi, '-'); }
 
-  async function collectPageAssets() {
+  async function collectPageAssets({ replaceIframesWithPoster = true } = {}) {
     const urls = new Set();
     const skipped = [];
     const inlineCssTexts = [];
+    const iframeRepls = [];
 
     const add = (u, ctx) => {
       try {
@@ -441,6 +452,33 @@
       inlineCssTexts.push(style);
     });
 
+    // Computed background and mask images (covers CSS modules/classes)
+    document.querySelectorAll('*').forEach(el => {
+      try {
+        const cs = getComputedStyle(el);
+        const props = [
+          'background-image','background','mask','mask-image','border-image-source','list-style-image','content','cursor'
+        ];
+        for (const p of props) {
+          const v = cs.getPropertyValue(p);
+          if (v && v.includes('url(')) extractCssUrls(v).forEach(u => add(u));
+        }
+      } catch (e) { /* ignore */ }
+    });
+
+    // External video iframes → poster thumbnails (e.g., YouTube)
+    if (replaceIframesWithPoster) {
+      document.querySelectorAll('iframe[src]').forEach(ifr => {
+        const src = ifr.getAttribute('src');
+        if (!src) return;
+        const yt = youtubePosterFromEmbed(src);
+        if (yt) {
+          add(yt.posterUrl);
+          iframeRepls.push({ originalSrc: new URL(src, document.baseURI).href, posterUrl: yt.posterUrl, linkUrl: yt.linkUrl, title: ifr.getAttribute('title') || 'Video' });
+        }
+      });
+    }
+
     // Inline <style> blocks
     document.querySelectorAll('style').forEach(st => {
       const text = st.textContent || '';
@@ -470,7 +508,7 @@
     });
 
     const html = '<!doctype html>\n' + document.documentElement.outerHTML;
-    return { urls, html, skipped, inlineCssTexts };
+    return { urls, html, skipped, inlineCssTexts, totalAssetCandidates: urls.size, iframeRepls };
   }
 
   function extractCssUrls(cssText) {
@@ -704,6 +742,12 @@
       return `style=${q}${rewritten}${q}`;
     });
 
+    // Add optional font fallback for better symbol rendering (₹ etc.)
+    if (opts.fontFallback) {
+      const fallbackCss = `\n<style id="getinspire-font-fallback">\n  @font-face {\n    font-family: "GetInspireSymbolFallback";\n    src: local("Nirmala UI"), local("Segoe UI Symbol"), local("Arial Unicode MS"), local("DejaVu Sans"), local("Noto Sans"), local("Noto Sans Symbols");\n    unicode-range: U+20A0-20CF; /* currency block includes ₹ */\n    font-display: swap;\n  }\n  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', 'Helvetica Neue', Arial, 'GetInspireSymbolFallback', 'Noto Color Emoji', 'Segoe UI Emoji', sans-serif; }\n</style>`;
+      html = html.replace(/<head\b[^>]*>/i, (m) => m + fallbackCss);
+    }
+
     // Inline <style> blocks url() and @import
     html = html.replace(/<style(\b[^>]*)>([\s\S]*?)<\/style>/gi, (m, attrs, css) => {
       const css1 = css
@@ -725,6 +769,21 @@
         });
       return `<style${attrs}>${css1}</style>`;
     });
+
+    // Replace third-party iframes with downloaded thumbnails where available
+    if (opts.iframeRepls && opts.iframeRepls.length) {
+      for (const r of opts.iframeRepls) {
+        try {
+          const absPoster = new URL(r.posterUrl, base).href;
+          const entry = map.get(absPoster);
+          if (!entry) continue;
+          const imgTag = `<a href="${r.linkUrl || r.originalSrc}" target="_blank" rel="noopener noreferrer"><img src="${entry.path}" alt="${(r.title||'Video').replace(/["<>]/g,'')}" style="max-width:100%;height:auto;display:block;border:0"/></a>`;
+          const srcEsc = r.originalSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const pat = new RegExp(`<iframe[^>]*?src=(["'])${srcEsc}\\1[\s\S]*?>[\s\S]*?<\\/iframe>`, 'gi');
+          html = html.replace(pat, imgTag);
+        } catch (e) { console.error(e); }
+      }
+    }
 
     // Optionally strip scripts and inline handlers for offline safety
     if (opts.stripScripts) {
@@ -887,6 +946,64 @@
     lines.push('- Back-end APIs are not mirrored.');
     lines.push('- Infinite feeds are blocked or timed out by heuristic.');
     return lines.join('\n');
+  }
+
+  // ---- Normalization helpers for better fidelity ----
+  async function normalizePageForSnapshot({ includeVideo }) {
+    try {
+      // Convert common lazy attributes to real src/srcset
+      const convertAttrs = (el, pairs) => {
+        for (const [from, to] of pairs) {
+          const v = el.getAttribute(from);
+          if (v && !el.getAttribute(to)) el.setAttribute(to, v);
+        }
+      };
+      const pairs = [
+        ['data-src','src'], ['data-original','src'], ['data-lazy','src'], ['data-lazy-src','src'], ['data-llsrc','src'],
+        ['data-srcset','srcset'], ['data-lazy-srcset','srcset'], ['data-llsrcset','srcset']
+      ];
+      document.querySelectorAll('img, source').forEach(el => {
+        convertAttrs(el, pairs);
+        if (el.tagName === 'IMG') { try { el.loading = 'eager'; el.decoding = 'sync'; } catch {} }
+      });
+      if (includeVideo) {
+        document.querySelectorAll('video, audio, source').forEach(el => convertAttrs(el, pairs));
+        document.querySelectorAll('video').forEach(v => { try { v.preload = 'metadata'; } catch {} });
+      }
+      // Wait briefly for image decodes
+      const pending = Array.from(document.images).filter(im => im.src && !im.complete).slice(0, 200);
+      await Promise.race([
+        Promise.allSettled(pending.map(im => im.decode ? im.decode().catch(()=>{}) : new Promise(r=>{ im.addEventListener('load',r,{once:true}); im.addEventListener('error',r,{once:true}); setTimeout(r,1500);}))),
+        new Promise(r => setTimeout(r, 2500))
+      ]);
+      // Loosen carousels so slides aren't cropped
+      const carSel = '[class*="carousel"], [class*="slider"], [class*="slick"], [class*="swiper"], [data-carousel], [role="region"]';
+      document.querySelectorAll(carSel).forEach(c => {
+        try {
+          const cs = getComputedStyle(c);
+          if (cs.overflowX === 'hidden' || /hidden|clip/.test(cs.overflow)) c.style.overflow = 'visible';
+          if (cs.transform && cs.transform !== 'none') c.style.transform = 'none';
+        } catch {}
+      });
+      document.querySelectorAll('[style*="transform"], [class*="slide"], [class*="track"]').forEach(el => {
+        try { const cs = getComputedStyle(el); if (cs.transform && cs.transform !== 'none') el.style.transform = 'none'; } catch {}
+      });
+    } catch (e) { console.error(e); }
+  }
+
+  function youtubePosterFromEmbed(src) {
+    try {
+      const u = new URL(src, document.baseURI);
+      if (/youtube\.com\/embed\//.test(u.href)) {
+        const id = u.pathname.split('/').pop();
+        return { posterUrl: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`, linkUrl: `https://www.youtube.com/watch?v=${id}` };
+      }
+      if (/youtu\.be\//.test(u.href)) {
+        const id = u.pathname.split('/').pop();
+        return { posterUrl: `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`, linkUrl: `https://www.youtube.com/watch?v=${id}` };
+      }
+    } catch {}
+    return null;
   }
 
   // ---- helpers: digest, manifest, overlay, mhtml ----
