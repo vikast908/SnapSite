@@ -9,8 +9,9 @@ Install (Load Unpacked)
 
 Use
 - Open a normal, finite page (blog, docs, landing page)
-- Click "Capture this page" in the popup
+- Click "Capture this page" in the popup (or use shortcut Ctrl+Shift+S)
 - Save the ZIP, unzip it, open `quick-check.html` for a fast sanity check, then `index.html`
+  - Quick Check now embeds the report inline, so it works even when the browser blocks `fetch()` on `file://` URLs.
 
 What's Included
 - `index.html`: DOM snapshot with local asset paths
@@ -25,6 +26,7 @@ Endless Pages & Limits
 
 Settings
 - Options page lets you adjust caps, redact behavior, denylist, and whether to save without prompt
+ - Defaults are shared across the extension; the Options page imports them from `src/defaults.js`.
 
 Permissions
 - The extension requests per-origin host access only when needed to fetch cross-origin assets in the background. Chrome may prompt you the first time an asset needs fetching from a new domain.
@@ -33,3 +35,4 @@ Permissions
 Notes
 - Third-party iframes stay external by design and may not work offline
 - Cross-origin assets can be blocked by CORS/CSP; failures are listed in the report
+ - The popup shows live progress during capture

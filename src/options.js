@@ -1,18 +1,20 @@
 ;(async () => {
-  const defaults = {
-    maxMillis: 90000,
+  // Load shared defaults from src/defaults.js
+  const { defaults } = await import(chrome.runtime.getURL('src/defaults.js')).catch(() => ({ defaults: {
+    maxMillis: 90_000,
     maxAssets: 2500,
     maxZipMB: 750,
     concurrency: 8,
+    requestTimeoutMs: 20_000,
+    scrollIdleMs: 2_000,
+    maxScrollIterations: 200,
     redact: true,
     saveWithoutPrompt: false,
     skipVideo: true,
     denylist: [
       String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
       String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
-      String(
-        /https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i,
-      ),
+      String(/https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i),
       String(/https?:\/\/([^\/]+\.)?(reddit\.com)\//i),
       String(/https?:\/\/([^\/]+\.)?linkedin\.com\/feed/i),
       String(/https?:\/\/([^\/]+\.)?pinterest\.[^\/]+\//i),
@@ -22,7 +24,7 @@
       String(/https?:\/\/([^\/]+\.)?youtube\.com\/feed\//i),
       String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i),
     ],
-  };
+  }}));
 
   const els = {
     maxMillis: document.getElementById('maxMillis'),
@@ -47,7 +49,8 @@
       els.redact.checked = v.redact ?? defaults.redact;
       els.saveWithoutPrompt.checked = v.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
       els.skipVideo.checked = v.skipVideo ?? defaults.skipVideo;
-      const list = (v.denylist ?? defaults.denylist).map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
+      const list = (Array.isArray(v.denylist) ? v.denylist : defaults.denylist)
+        .map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
       els.denylist.value = list;
     });
   }

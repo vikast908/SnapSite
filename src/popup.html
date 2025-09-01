@@ -9,6 +9,10 @@
       .row { margin: 4px 0; }
       .status { margin-top: 8px; white-space: pre-wrap; min-height: 2em; }
       small { color: #666; }
+      .progress { margin-top: 8px; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+      .progress .bar { height: 100%; width: 0%; background: #3b82f6; transition: width 0.2s ease; }
+      .progress-row { display: flex; align-items: center; gap: 8px; }
+      .pct { min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; color: #333; }
     </style>
   </head>
   <body>
@@ -18,6 +22,12 @@
       <button id="stopBtn" disabled>Stop</button>
     </div>
     <div class="status" id="status">Idle</div>
+    <div class="row progress-row">
+      <div class="progress" style="flex:1">
+        <div class="bar" id="bar"></div>
+      </div>
+      <div class="pct" id="pct">0%</div>
+    </div>
     <small id="hint">Scan -> Scroll -> Collect -> Rewrite -> Zip -> Download</small>
     <script src="popup.js"></script>
   </body>

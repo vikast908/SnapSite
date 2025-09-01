@@ -125,3 +125,20 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
   }
 });
+
+// Keyboard shortcut: Capture via command
+try {
+  chrome.commands.onCommand.addListener(async (command) => {
+    if (command !== 'capture-page') return;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['src/vendor/jszip.min.js', 'src/content.js']
+      });
+    } catch (e) {
+      try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) }); } catch {}
+    }
+  });
+} catch (e) { console.error(e); }

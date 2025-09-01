@@ -1,6 +1,8 @@
 const statusEl = document.getElementById('status');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const barEl = document.getElementById('bar');
+const pctEl = document.getElementById('pct');
 
 let currentTabId = null;
 
@@ -12,6 +14,14 @@ async function getActiveTabId() {
 }
 
 function setStatus(s) { statusEl.textContent = s; }
+function setProgress(done, total) {
+  total = Math.max(1, Number(total) || 1);
+  done = Math.max(0, Math.min(total, Number(done) || 0));
+  const pct = Math.floor((done * 100) / total);
+  if (barEl) barEl.style.width = Math.min(99, pct) + '%';
+  if (pctEl) pctEl.textContent = pct + '%';
+}
+function resetProgress() { setProgress(0, 1); }
 
 async function runCapture() {
   currentTabId = await getActiveTabId();
@@ -20,6 +30,7 @@ async function runCapture() {
     return;
   }
   setStatus('Starting...');
+  resetProgress();
   stopBtn.disabled = false;
   try {
     await chrome.scripting.executeScript({
@@ -29,6 +40,7 @@ async function runCapture() {
   } catch (e) {
     setStatus('Error injecting scripts: ' + String(e));
     stopBtn.disabled = true;
+    resetProgress();
   }
 }
 
@@ -49,12 +61,15 @@ stopBtn.addEventListener('click', async () => {
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'GETINSPIRE_STATUS') setStatus(msg.text);
+  if (msg.type === 'GETINSPIRE_PROGRESS') setProgress(msg.downloaded, msg.total);
   if (msg.type === 'GETINSPIRE_DONE') {
     setStatus('Downloaded ZIP.');
     stopBtn.disabled = true;
+    setProgress(msg.total || 1, msg.total || 1);
   }
   if (msg.type === 'GETINSPIRE_ERROR') {
     setStatus('Error: ' + (msg.error || 'Unknown error'));
     stopBtn.disabled = true;
+    resetProgress();
   }
 });

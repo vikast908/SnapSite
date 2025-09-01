@@ -125,7 +125,7 @@
       assets: dres.map,
       reportJson: JSON.stringify(state.report, null, 2),
       readmeMd: buildReadme(state.report),
-      quickCheckHtml: quickCheckHtml(),
+      quickCheckHtml: quickCheckHtml(state.report),
       sizeCap: options.maxZipMB * 1024 * 1024,
     });
     state.report.stats.zipBytes = blob1.size;
@@ -136,7 +136,7 @@
       assets: dres.map,
       reportJson: JSON.stringify(state.report, null, 2),
       readmeMd: buildReadme(state.report),
-      quickCheckHtml: quickCheckHtml(),
+      quickCheckHtml: quickCheckHtml(state.report),
       sizeCap: options.maxZipMB * 1024 * 1024,
     });
 
@@ -614,10 +614,18 @@
       }
     } catch (e) { console.error(e); }
     const table = {
+      // Images
       'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif', 'image/svg+xml': '.svg',
+      'image/avif': '.avif', 'image/x-icon': '.ico', 'image/vnd.microsoft.icon': '.ico',
+      // Styles & Scripts
       'text/css': '.css', 'text/javascript': '.js', 'application/javascript': '.js', 'application/x-javascript': '.js',
-      'font/woff2': '.woff2', 'font/woff': '.woff', 'font/ttf': '.ttf',
-      'audio/mpeg': '.mp3', 'video/mp4': '.mp4'
+      'application/json': '.json', 'application/manifest+json': '.json', 'text/plain': '.txt',
+      // Fonts
+      'font/woff2': '.woff2', 'font/woff': '.woff', 'font/ttf': '.ttf', 'font/otf': '.otf', 'application/vnd.ms-fontobject': '.eot',
+      // Audio
+      'audio/mpeg': '.mp3', 'audio/ogg': '.ogg', 'audio/wav': '.wav', 'audio/aac': '.aac', 'audio/flac': '.flac', 'audio/midi': '.midi', 'audio/x-midi': '.midi',
+      // Video
+      'video/mp4': '.mp4', 'video/webm': '.webm', 'application/vnd.apple.mpegurl': '.m3u8', 'application/x-mpegURL': '.m3u8', 'video/MP2T': '.ts'
     };
     return table[mime] || '';
   }
@@ -734,7 +742,11 @@
     return { blob };
   }
 
-  function quickCheckHtml() {
+  function quickCheckHtml(report) {
+    // Embed report inline to avoid fetch() issues on file:// URLs
+    const reportInline = (() => {
+      try { return JSON.stringify(report).replace(/</g, '\\u003c'); } catch { return 'null'; }
+    })();
     return `<!doctype html>
 <html>
   <head>
@@ -763,7 +775,20 @@
       <iframe src="./index.html"></iframe>
     </main>
     <script>
-      fetch('./report/fetch-report.json').then(r => r.json()).then(r => {
+      (function(){
+        var r = (function(){ try { return (window.__GETINSPIRE_REPORT__ = ${reportInline}); } catch (e) { return null; } })();
+        if (!r) {
+          try {
+            return fetch('./report/fetch-report.json').then(function(resp){ return resp.json(); }).then(applyReport);
+          } catch (e) {
+            document.getElementById('summary').textContent = 'Report not available';
+            return;
+          }
+        }
+        applyReport(r);
+      })();
+
+      function applyReport(r){
         const s = r.stats || {};
         const ok = s.assetsDownloaded || 0;
         const fail = s.assetsFailed || 0;
@@ -780,9 +805,7 @@
           li.textContent = (f.status?('['+f.status+'] '):'') + f.url + (f.reason?(' - ' + f.reason):'');
           ul.appendChild(li);
         });
-      }).catch(e => {
-        document.getElementById('summary').textContent = 'Report not found: ' + e;
-      });
+      }
     </script>
   </body>
   </html>`;

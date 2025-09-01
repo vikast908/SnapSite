@@ -8,6 +8,14 @@
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "src/background.js", "type": "module" },
   "options_page": "src/options.html",
+  "commands": {
+    "capture-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S"
+      },
+      "description": "GetInspire: Capture this page"
+    }
+  },
   "icons": {
     "16": "assets/icons/16.png",
     "32": "assets/icons/32.png",
