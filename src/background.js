@@ -1,9 +1,29 @@
+// In-memory cache to reduce duplicate permission prompts in-session
+const __grantedOrigins = new Set();
+
+async function ensureHostPermissionFor(urlStr, sameOrigin) {
+  try {
+    if (sameOrigin) return true; // No extra permission needed
+    const u = new URL(urlStr);
+    const pattern = `${u.origin}/*`;
+    if (__grantedOrigins.has(pattern)) return true;
+    const has = await chrome.permissions.contains({ origins: [pattern] }).catch(() => false);
+    if (has) { __grantedOrigins.add(pattern); return true; }
+    const ok = await chrome.permissions.request({ origins: [pattern] }).catch(() => false);
+    if (ok) { __grantedOrigins.add(pattern); return true; }
+  } catch {}
+  return false;
+}
+
 chrome.runtime.onMessage.addListener(async (msg, sender) => {
   // On-demand fetch proxy (fallback for CORS/credentials issues in content)
   if (msg?.type === 'GETINSPIRE_FETCH') {
     try {
       const url = msg.url;
       const same = (() => { try { return new URL(url).origin === (sender?.origin || sender?.url && new URL(sender.url).origin); } catch { return false; } })();
+      // Ensure per-origin host permission for cross-origin requests
+      const canFetch = await ensureHostPermissionFor(url, same);
+      if (!canFetch) throw new Error('perm-denied: ' + (new URL(url)).origin);
       const res = await fetch(url, { credentials: same ? 'include' : 'omit', mode: 'cors' });
       if (!res.ok) throw new Error('status ' + res.status);
       const buf = await res.arrayBuffer();

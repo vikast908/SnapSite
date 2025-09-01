@@ -4,14 +4,18 @@ const stopBtn = document.getElementById('stopBtn');
 
 let currentTabId = null;
 
-chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-  currentTabId = tab?.id;
-});
+async function getActiveTabId() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tabs?.[0]?.id || null;
+  } catch { return null; }
+}
 
 function setStatus(s) { statusEl.textContent = s; }
 
 async function runCapture() {
-  if (!currentTabId) return;
+  currentTabId = await getActiveTabId();
+  if (!currentTabId) { setStatus('No active tab.'); return; }
   setStatus('Starting...');
   stopBtn.disabled = false;
   try {
@@ -28,6 +32,7 @@ async function runCapture() {
 startBtn.addEventListener('click', runCapture);
 
 stopBtn.addEventListener('click', async () => {
+  currentTabId = await getActiveTabId();
   if (!currentTabId) return;
   await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
 });

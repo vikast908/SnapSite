@@ -76,20 +76,7 @@
 
     if (state.stopped) return fail('Stopped by user.');
 
-    // Redact sensitive/auth text (heuristic)
-    if (false && options.redact) {
-      sendStatus('Redacting authenticated text...');
-      try {
-        const redactions = redactDomHeuristic();
-        for (const r of redactions) state.report.redactions.push(r);
-        // Additional pass: redact obvious emails and token-like strings
-        const extra = redactTextPatterns([
-          { re: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/ig, label: 'email' },
-          { re: /\b[a-z0-9]{24,}\b/ig, label: 'token-like' }
-        ], 200);
-        for (const r of extra) state.report.redactions.push(r);
-      } catch {}
-    }
+    // Redaction happens on cloned snapshot below (not mutating live DOM)
 
     // Collect assets & initial HTML snapshot
     sendStatus('Collecting assets...');
@@ -101,7 +88,7 @@
     // Redact on cloned snapshot (do not mutate live page)
     let htmlForRewrite = collected.html;
     if (options.redact) {
-      sendStatus('Redacting authenticated text…');
+      sendStatus('Redacting authenticated text...');
       try {
         const red = redactHtml(collected.html);
         htmlForRewrite = red.html;
@@ -405,7 +392,7 @@
     const add = (u, ctx) => {
       try {
         if (!u) return;
-        if (u.startsWith('data:')) { skipped.push({ url: u.slice(0, 64) + (u.length > 64 ? '…' : ''), reason: 'data-uri' }); return; }
+        if (u.startsWith('data:')) { skipped.push({ url: u.slice(0, 64) + (u.length > 64 ? '...' : ''), reason: 'data-uri' }); return; }
         const abs = new URL(u, document.baseURI).href;
         urls.add(abs);
       } catch {}
@@ -776,7 +763,7 @@
   <body>
     <aside>
       <h2>Quick Check</h2>
-      <div id="summary">Loading report…</div>
+      <div id="summary">Loading report...</div>
       <h3>Top failures</h3>
       <ul id="fails"></ul>
     </aside>
@@ -798,7 +785,7 @@
         const ul = document.getElementById('fails');
         (r.failures||[]).slice(0,20).forEach(f => {
           const li = document.createElement('li');
-          li.textContent = (f.status?('['+f.status+'] '):'') + f.url + (f.reason?(' — ' + f.reason):'');
+          li.textContent = (f.status?('['+f.status+'] '):'') + f.url + (f.reason?(' - ' + f.reason):'');
           ul.appendChild(li);
         });
       }).catch(e => {
@@ -830,10 +817,10 @@
     lines.push(`- Reason: ${report.endlessDetection.reason ?? 'n/a'}`);
     lines.push('');
     lines.push('## Failures (top 20)');
-    for (const f of report.failures.slice(0,20)) lines.push(`- ${f.status||''} ${f.url} — ${f.reason||''}`);
+    for (const f of report.failures.slice(0,20)) lines.push(`- ${f.status||''} ${f.url} - ${f.reason||''}`);
     lines.push('');
     lines.push('## Redactions');
-    for (const r of report.redactions) lines.push(`- ${r.selector} (len=${r.length}) — ${r.reason}`);
+    for (const r of report.redactions) lines.push(`- ${r.selector} (len=${r.length}) - ${r.reason}`);
     lines.push('');
     lines.push('## Notes');
     for (const n of report.notes) lines.push(`- ${n}`);
