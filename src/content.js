@@ -514,9 +514,18 @@
     document.querySelectorAll('img').forEach(im => { try { if (im.currentSrc && !im.currentSrc.startsWith('data:')) add(im.currentSrc); } catch {} });
 
     // External SVG sprite references via <use>
-    document.querySelectorAll('use[href], use[xlink\:href]').forEach(u => {
-      const val = u.getAttribute('href') || u.getAttribute('xlink:href');
-      if (!val) return; if (val.startsWith('#')) return; add(val);
+    // Avoid namespaced attribute selectors which can be invalid in querySelectorAll
+    document.querySelectorAll('use').forEach(u => {
+      let val = u.getAttribute('href') || u.getAttribute('xlink:href');
+      // Fallback to explicit namespace API if present
+      try {
+        if (!val && typeof u.getAttributeNS === 'function') {
+          val = u.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+        }
+      } catch {}
+      if (!val) return;
+      if (val.startsWith('#')) return;
+      add(val);
     });
 
     const html = '<!doctype html>\n' + document.documentElement.outerHTML;
