@@ -15,7 +15,10 @@ function setStatus(s) { statusEl.textContent = s; }
 
 async function runCapture() {
   currentTabId = await getActiveTabId();
-  if (!currentTabId) { setStatus('No active tab.'); return; }
+  if (!currentTabId) {
+    setStatus('No active tab.');
+    return;
+  }
   setStatus('Starting...');
   stopBtn.disabled = false;
   try {
@@ -34,7 +37,14 @@ startBtn.addEventListener('click', runCapture);
 stopBtn.addEventListener('click', async () => {
   currentTabId = await getActiveTabId();
   if (!currentTabId) return;
-  await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
+
+  stopBtn.disabled = true;
+  setStatus('Stopping...');
+  try {
+    await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
+  } catch (e) {
+    setStatus('Error sending stop message: ' + String(e));
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg) => {

@@ -33,23 +33,29 @@
     report: baseReport(),
   };
 
+  // Options loaded at runtime, available to helpers via closure
+  let options;
+
   const sendStatus = (text) => chrome.runtime.sendMessage({ type: 'GETINSPIRE_STATUS', text }).catch(() => {});
   const fail = (msg) => {
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: msg }).catch(() => {});
     cleanup();
     throw new Error(msg);
   };
-  const cleanup = () => { window.__GETINSPIRE_RUNNING__ = false; };
-
-  chrome.runtime.onMessage.addListener((msg) => {
+  const onRuntimeMessage = (msg) => {
     if (msg?.type === 'GETINSPIRE_STOP') state.stopped = true;
-  });
+  };
+
+  const cleanup = () => {
+    chrome.runtime.onMessage.removeListener(onRuntimeMessage);
+    window.__GETINSPIRE_RUNNING__ = false;
+  };
+
+  chrome.runtime.onMessage.addListener(onRuntimeMessage);
 
   ;(async function main() {
     if (!window.JSZip) return fail('Internal error: ZIP library missing.');
-    const options = await loadOptions();
-    // expose for collection helpers
-    window.__GETINSPIRE_OPTIONS__ = options;
+    options = await loadOptions();
     const denylistRe = compileDenylist(options.denylist);
 
     // Denylist gate
@@ -93,13 +99,13 @@
         const red = redactHtml(collected.html);
         htmlForRewrite = red.html;
         for (const r of red.redactions) state.report.redactions.push(r);
-      } catch {}
+      } catch (e) { console.error(e); }
     }
 
     // Download assets with concurrency and caps
     const totalAssets = collected.urls.size;
     sendStatus(`Downloading ${totalAssets} assets...`);
-    try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: 0, total: totalAssets }); } catch {}
+    try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: 0, total: totalAssets }); } catch (e) { console.error(e); }
     const dres = await downloadAllAssets(collected.urls, {
       concurrency: options.concurrency,
       maxAssets: options.maxAssets,
@@ -164,7 +170,7 @@
     const URLRef = (window.URL || self.URL);
     const blobUrl = URLRef.createObjectURL(blob);
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_DOWNLOAD_ZIP', blobUrl, filename });
-    try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: totalAssets, total: totalAssets }); } catch {}
+      try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: totalAssets, total: totalAssets }); } catch (e) { console.error(e); }
     sendStatus('Done.');
     cleanup();
   })().catch(e => fail(e?.message || String(e)));
@@ -234,7 +240,7 @@
       try {
         const m = /^\/(.*)\/(\w+)?$/.exec(String(s).trim());
         if (m) out.push(new RegExp(m[1], m[2] || 'i'));
-      } catch {}
+        } catch (e) { console.error(e); }
     }
     return out;
   }
@@ -401,14 +407,14 @@
         if (u.startsWith('data:')) { skipped.push({ url: u.slice(0, 64) + (u.length > 64 ? '...' : ''), reason: 'data-uri' }); return; }
         const abs = new URL(u, document.baseURI).href;
         urls.add(abs);
-      } catch {}
+        } catch (e) { console.error(e); }
     };
 
     // Elements with src (exclude iframes; optional: skip video)
     document.querySelectorAll('img[src], script[src], audio[src], video[src], track[src], source[src]').forEach(el => {
       const tag = el.tagName;
       if (tag === 'IFRAME') return;
-      if ((tag === 'VIDEO' || (tag === 'SOURCE' && el.closest('video')) || (tag === 'TRACK' && el.closest('video'))) && (window.__GETINSPIRE_OPTIONS__?.skipVideo ?? true)) {
+      if ((tag === 'VIDEO' || (tag === 'SOURCE' && el.closest('video')) || (tag === 'TRACK' && el.closest('video'))) && (options?.skipVideo ?? true)) {
         const u = el.getAttribute('src');
         if (u) skipped.push({ url: new URL(u, document.baseURI).href, reason: 'video' });
         return;
@@ -446,14 +452,14 @@
 
     // External stylesheets: fetch to follow their @import and url() for completeness
     await Promise.all(Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]')).map(async (link) => {
-      try {
-        const same = new URL(link.href, document.baseURI).origin === location.origin;
-        const res = await fetch(link.href, { credentials: same ? 'include' : 'omit', mode: 'cors' });
-        if (!res.ok) return;
-        const text = await res.text();
-        extractCssUrls(text).forEach(u => add(new URL(u, link.href).href));
-        extractCssImports(text).forEach(u => add(new URL(u, link.href).href));
-      } catch {}
+        try {
+          const same = new URL(link.href, document.baseURI).origin === location.origin;
+          const res = await fetch(link.href, { credentials: same ? 'include' : 'omit', mode: 'cors' });
+          if (!res.ok) return;
+          const text = await res.text();
+          extractCssUrls(text).forEach(u => add(new URL(u, link.href).href));
+          extractCssImports(text).forEach(u => add(new URL(u, link.href).href));
+        } catch (e) { console.error(e); }
     }));
 
     // Preload links for styles/scripts/fonts/images
@@ -497,7 +503,7 @@
     const markStop = (reason) => {
       if (!stopReason) stopReason = reason;
       // Abort any in-flight fetches
-      controllers.forEach((c) => { try { c.abort(); } catch {} });
+      controllers.forEach((c) => { try { c.abort(); } catch (e) { console.error(e); } });
     };
 
     const next = () => new Promise((resolve) => {
@@ -512,14 +518,14 @@
         let controller = null; let toId = null;
         try {
           // Skip video assets if configured or detected
-          if ((window.__GETINSPIRE_OPTIONS__?.skipVideo ?? true) && isVideoUrl(url)) {
+          if ((options?.skipVideo ?? true) && isVideoUrl(url)) {
             state.report.skipped.push({ url, reason: 'video' });
             skipCount++;
             return resolve();
           }
-          controller = new AbortController();
-          controllers.add(controller);
-          toId = setTimeout(() => { try { controller.abort('timeout'); } catch {} }, cfg.requestTimeoutMs || 20000);
+            controller = new AbortController();
+            controllers.add(controller);
+            toId = setTimeout(() => { try { controller.abort('timeout'); } catch (e) { console.error(e); } }, cfg.requestTimeoutMs || 20000);
           const same = new URL(url, document.baseURI).origin === location.origin;
           let res;
           try {
@@ -558,9 +564,9 @@
           failures.push({ url, status: parseInt(reason) || 0, reason });
         } finally {
           inFlight--;
-          try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: (map.size + failures.length + skipCount), total: queue.length }); } catch {}
-          try { if (toId) clearTimeout(toId); } catch {}
-          try { if (controller) controllers.delete(controller); } catch {}
+            try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: (map.size + failures.length + skipCount), total: queue.length }); } catch (e) { console.error(e); }
+            try { if (toId) clearTimeout(toId); } catch (e) { console.error(e); }
+            try { if (controller) controllers.delete(controller); } catch (e) { console.error(e); }
           resolve();
         }
       };
@@ -601,7 +607,7 @@
       const id = Math.random().toString(36).slice(2);
       const onMsg = (msg) => {
         if (msg?.type === 'GETINSPIRE_FETCH_RESULT' && msg.id === id) {
-          try { chrome.runtime.onMessage.removeListener(onMsg); } catch {}
+            try { chrome.runtime.onMessage.removeListener(onMsg); } catch (e) { console.error(e); }
           if (!msg.ok) return reject(new Error(msg.error || 'fetch-failed'));
           const blob = new Blob([msg.arrayBuffer], { type: msg.contentType || 'application/octet-stream' });
           resolve({ blob, mime: msg.contentType || 'application/octet-stream' });
@@ -609,12 +615,12 @@
       };
       chrome.runtime.onMessage.addListener(onMsg);
       chrome.runtime.sendMessage({ type: 'GETINSPIRE_FETCH', id, url }).catch(err => {
-        try { chrome.runtime.onMessage.removeListener(onMsg); } catch {}
+          try { chrome.runtime.onMessage.removeListener(onMsg); } catch (e) { console.error(e); }
         reject(err);
       });
       // Safety timeout
       setTimeout(() => {
-        try { chrome.runtime.onMessage.removeListener(onMsg); } catch {}
+          try { chrome.runtime.onMessage.removeListener(onMsg); } catch (e) { console.error(e); }
         reject(new Error('fetch-timeout'));
       }, 25000);
     });
@@ -628,7 +634,7 @@
         const ext = p.slice(dot).split(/[?#]/)[0];
         if (ext.length <= 6) return ext;
       }
-    } catch {}
+    } catch (e) { console.error(e); }
     const table = {
       'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif', 'image/svg+xml': '.svg',
       'text/css': '.css', 'text/javascript': '.js', 'application/javascript': '.js', 'application/x-javascript': '.js',
@@ -647,6 +653,8 @@
 
     // Neutralize <base> tag which can break offline paths
     html = html.replace(/<base\b[^>]*>/i, '');
+    // Remove CSP meta tag to allow local asset loading
+    html = html.replace(/<meta[^>]+http-equiv=["']content-security-policy["'][^>]*>/gi, '');
 
     // src|href|poster
     html = html.replace(/\b(src|href|poster)=(["'])([^"']+)(\2)/gi, (m, a, q, u) => {
@@ -774,10 +782,10 @@
       <ul id="fails"></ul>
     </aside>
     <main>
-      <iframe src="index.html"></iframe>
+      <iframe src="./index.html"></iframe>
     </main>
     <script>
-      fetch('report/fetch-report.json').then(r => r.json()).then(r => {
+      fetch('./report/fetch-report.json').then(r => r.json()).then(r => {
         const s = r.stats || {};
         const ok = s.assetsDownloaded || 0;
         const fail = s.assetsFailed || 0;

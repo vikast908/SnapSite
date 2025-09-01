@@ -59,18 +59,25 @@ function load() {
 function save() {
   const deny = els.denylist.value
     .split(/\n+/)
-    .map((s) => s.trim())
+    .map(s => s.trim())
     .filter(Boolean);
+
+  const getNum = (el, def, mul = 1) => {
+    const n = Number(el.value);
+    return Number.isFinite(n) && n > 0 ? n * mul : def;
+  };
+
   const conf = {
-    maxMillis: Number(els.maxMillis.value) * 1000,
-    maxAssets: Number(els.maxAssets.value),
-    maxZipMB: Number(els.maxZipMB.value),
-    concurrency: Number(els.concurrency.value),
+    maxMillis: getNum(els.maxMillis, defaults.maxMillis, 1000),
+    maxAssets: getNum(els.maxAssets, defaults.maxAssets),
+    maxZipMB: getNum(els.maxZipMB, defaults.maxZipMB),
+    concurrency: getNum(els.concurrency, defaults.concurrency),
     redact: Boolean(els.redact.checked),
     saveWithoutPrompt: Boolean(els.saveWithoutPrompt.checked),
     skipVideo: Boolean(els.skipVideo.checked),
-    denylist: deny,
+    denylist: deny
   };
+
   chrome.storage.sync.set({ getinspireOptions: conf }, () => {
     els.saved.style.display = 'inline';
     setTimeout(() => (els.saved.style.display = 'none'), 1000);

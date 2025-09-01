@@ -11,7 +11,7 @@ async function ensureHostPermissionFor(urlStr, sameOrigin) {
     if (has) { __grantedOrigins.add(pattern); return true; }
     const ok = await chrome.permissions.request({ origins: [pattern] }).catch(() => false);
     if (ok) { __grantedOrigins.add(pattern); return true; }
-  } catch {}
+  } catch (e) { console.error(e); }
   return false;
 }
 
@@ -30,7 +30,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const type = res.headers.get('content-type') || 'application/octet-stream';
       chrome.tabs.sendMessage(sender.tab.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: true, arrayBuffer: buf, contentType: type });
     } catch (e) {
-      try { chrome.tabs.sendMessage(sender?.tab?.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: false, error: String(e) }); } catch {}
+      try { chrome.tabs.sendMessage(sender?.tab?.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: false, error: String(e) }); } catch (e2) { console.error(e2); }
     }
     return; // handled
   }
@@ -44,7 +44,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const pct = Math.max(0, Math.min(99, Math.floor((done * 100) / total)));
       await chrome.action.setBadgeBackgroundColor({ tabId, color: '#3b82f6' });
       await chrome.action.setBadgeText({ tabId, text: `${pct}%` });
-    } catch {}
+    } catch (e) { console.error(e); }
     return;
   }
 
@@ -55,9 +55,9 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       if (tabId) {
         await chrome.action.setBadgeBackgroundColor({ tabId, color: '#ef4444' });
         await chrome.action.setBadgeText({ tabId, text: 'ERR' });
-        setTimeout(async () => { try { await chrome.action.setBadgeText({ tabId, text: '' }); } catch {} }, 4000);
+        setTimeout(async () => { try { await chrome.action.setBadgeText({ tabId, text: '' }); } catch (e) { console.error(e); } }, 4000);
       }
-    } catch {}
+    } catch (e) { console.error(e); }
     return; // also let popup handle the message
   }
 
@@ -80,24 +80,24 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         saveAs: !saveWithoutPrompt,
         conflictAction: 'uniquify'
       });
-      setTimeout(() => { try { (globalThis.URL || self.URL).revokeObjectURL(blobUrl); } catch {} }, 30000);
+      setTimeout(() => { try { (globalThis.URL || self.URL).revokeObjectURL(blobUrl); } catch (e) { console.error(e); } }, 30000);
       chrome.runtime.sendMessage({ type: 'GETINSPIRE_DONE' });
       try {
         if (sender?.tab?.id) {
           await chrome.action.setBadgeBackgroundColor({ tabId: sender.tab.id, color: '#16a34a' });
           await chrome.action.setBadgeText({ tabId: sender.tab.id, text: 'OK' });
-          setTimeout(async () => { try { await chrome.action.setBadgeText({ tabId: sender.tab.id, text: '' }); } catch {} }, 3000);
+          setTimeout(async () => { try { await chrome.action.setBadgeText({ tabId: sender.tab.id, text: '' }); } catch (e) { console.error(e); } }, 3000);
         }
-      } catch {}
+      } catch (e) { console.error(e); }
     } catch (e) {
       chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) });
       try {
         if (sender?.tab?.id) {
           await chrome.action.setBadgeBackgroundColor({ tabId: sender.tab.id, color: '#ef4444' });
           await chrome.action.setBadgeText({ tabId: sender.tab.id, text: 'ERR' });
-          setTimeout(async () => { try { await chrome.action.setBadgeText({ tabId: sender.tab.id, text: '' }); } catch {} }, 4000);
+          setTimeout(async () => { try { await chrome.action.setBadgeText({ tabId: sender.tab.id, text: '' }); } catch (e) { console.error(e); } }, 4000);
         }
-      } catch {}
+      } catch (e2) { console.error(e2); }
     }
   }
 });
@@ -110,7 +110,7 @@ chrome.runtime.onInstalled.addListener(() => {
       title: 'GetInspire: Capture this page',
       contexts: ['page']
     });
-  } catch {}
+  } catch (e) { console.error(e); }
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
