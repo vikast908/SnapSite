@@ -1,5 +1,28 @@
 ;(async () => {
-  const { defaults } = await import(chrome.runtime.getURL('src/defaults.js'));
+  const defaults = {
+    maxMillis: 90000,
+    maxAssets: 2500,
+    maxZipMB: 750,
+    concurrency: 8,
+    redact: true,
+    saveWithoutPrompt: false,
+    skipVideo: true,
+    denylist: [
+      String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
+      String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
+      String(
+        /https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i,
+      ),
+      String(/https?:\/\/([^\/]+\.)?(reddit\.com)\//i),
+      String(/https?:\/\/([^\/]+\.)?linkedin\.com\/feed/i),
+      String(/https?:\/\/([^\/]+\.)?pinterest\.[^\/]+\//i),
+      String(/https?:\/\/([^\/]+\.)?medium\.com\/$/i),
+      String(/https?:\/\/news\.google\.com\//i),
+      String(/https?:\/\/([^\/]+\.)?quora\.com\//i),
+      String(/https?:\/\/([^\/]+\.)?youtube\.com\/feed\//i),
+      String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i),
+    ],
+  };
 
   const els = {
     maxMillis: document.getElementById('maxMillis'),
