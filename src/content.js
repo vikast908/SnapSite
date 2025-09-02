@@ -147,12 +147,17 @@
       const isYT = /(^|\.)youtube\.com$/i.test(location.hostname||'');
       if (isYT) {
         siteCss += [
-          // Hide transient spinners/overlays and top nav progress bar
+          // Hide transient spinners/overlays and skeletons that occasionally persist
           'ytd-thumbnail-overlay-loading-preview-renderer,',
           'tp-yt-paper-spinner,',
           'paper-spinner,',
           'yt-page-navigation-progress,',
-          'ytd-shimmer { display: none !important; }',
+          'ytd-shimmer,',
+          'ytd-guide-skeleton,',
+          'ytd-rich-grid-skeleton,',
+          'ytd-ghost-grid-renderer,',
+          'ytd-continuation-item-renderer',
+          ' { display: none !important; }',
         ].join('\n');
       }
     } catch {}
@@ -1090,8 +1095,8 @@
           const im = i.querySelector('img');
           return im && typeof im.src === 'string' && /^https?:/i.test(im.src);
         });
-        const shimmering = document.querySelector('ytd-shimmer, [animated][hidden][aria-busy="true"]');
-        return (items.length > 0 && hasThumb) || !shimmering;
+        const shimmering = document.querySelector('ytd-shimmer, ytd-guide-skeleton, ytd-rich-grid-skeleton, ytd-ghost-grid-renderer, [animated][hidden][aria-busy="true"], yt-page-navigation-progress[active]');
+        return (items.length > 0 && hasThumb) && !shimmering;
       } catch { return false; }
     };
     while (Date.now() - t0 < timeoutMs) {
