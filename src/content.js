@@ -147,7 +147,7 @@
       const isYT = /(^|\.)youtube\.com$/i.test(location.hostname||'');
       if (isYT) {
         siteCss += [
-          // Hide transient spinners/overlays and skeletons that occasionally persist
+          // Hide transient spinners/overlays and skeleton placeholders
           'ytd-thumbnail-overlay-loading-preview-renderer,',
           'tp-yt-paper-spinner,',
           'paper-spinner,',
@@ -156,7 +156,15 @@
           'ytd-guide-skeleton,',
           'ytd-rich-grid-skeleton,',
           'ytd-ghost-grid-renderer,',
-          'ytd-continuation-item-renderer',
+          'ytd-continuation-item-renderer,',
+          // Class-based skeletons seen on saved pages
+          '.video-skeleton,',
+          '.skeleton-bg-color,',
+          '.text-shell,',
+          '.thumbnail.skeleton-bg-color,',
+          '[class*="skeleton"],',
+          '[class*="text-shell"],',
+          '[class*="shimmer"]',
           ' { display: none !important; }',
         ].join('\n');
       }
