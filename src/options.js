@@ -24,7 +24,8 @@
       String(/https?:\/\/([^\/]+\.)?medium\.com\/$/i),
       String(/https?:\/\/news\.google\.com\//i),
       String(/https?:\/\/([^\/]+\.)?quora\.com\//i),
-      String(/https?:\/\/([^\/]+\.)?youtube\.com\/feed\//i),
+      // Allow YouTube Playlists feed (finite), block other /feed pages
+      String(/https?:\/\/([^\/]+\.)?youtube\.com\/feed\/(?!playlists)/i),
       String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i),
     ],
   }}));

@@ -5,11 +5,11 @@
     <title>GetInspire</title>
     <style>
       body { font: 13px/1.4 system-ui, sans-serif; min-width: 300px; padding: 12px; }
-      button { padding: 8px 12px; margin-right: 8px; }
+      button { padding: 8px 12px; margin-right: 8px; border-radius: 6px; }
       .row { margin: 4px 0; }
-      .status { margin-top: 8px; white-space: pre-wrap; min-height: 2em; }
+      .status { margin-top: 8px; white-space: pre-wrap; min-height: 2em; font-size: 12px; color: #555; }
       small { color: #666; }
-      .progress { margin-top: 8px; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+      .progress { margin-top: 8px; height: 8px; background: #eee; border-radius: 6px; overflow: hidden; }
       .progress .bar { height: 100%; width: 0%; background: #3b82f6; transition: width 0.2s ease; }
       .progress-row { display: flex; align-items: center; gap: 8px; }
       .pct { min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; color: #333; }
@@ -21,7 +21,7 @@
       <button id="startBtn">Capture this page</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
-    <div class="status" id="status">Idle</div>
+    <div class="status" id="status">ready to start?</div>
     <div class="row progress-row">
       <div class="progress" style="flex:1">
         <div class="bar" id="bar"></div>

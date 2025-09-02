@@ -46,7 +46,7 @@
     state.report.endlessDetection.deniedByList = denylistRe.some(re => re.test(location.href));
     if (state.report.endlessDetection.deniedByList) {
       state.report.endlessDetection.reason = 'denylist';
-      return fail('This page appears endless (infinite feed). Try a page that has a clear end.');
+      return fail('This URL matches the denylist (likely an endless feed). You can override this in Options.');
     }
 
     // Auto-scroll & stabilization
@@ -257,27 +257,36 @@
   }
 
   async function autoScrollUntilStable({ idleMs, maxIters, started, maxMillis }) {
+    // Consider the page "stable" when content height hasn't grown for
+    // a while, rather than when there are no DOM mutations. This avoids
+    // false positives on dynamic pages (e.g., media timers, live chats).
     return new Promise((resolve, reject) => {
-      let lastChange = Date.now();
       let iter = 0;
-      const obs = new MutationObserver(() => { lastChange = Date.now(); });
-      obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+      let lastH = document.documentElement.scrollHeight;
+      let lastHChange = Date.now();
 
       const step = () => {
         if (Date.now() - started > maxMillis) {
-          obs.disconnect();
           return reject(new Error('Page took too long; likely endless.'));
         }
         if (state.stopped) {
-          obs.disconnect();
           return reject(new Error('Stopped by user.'));
         }
-        const atBottom = Math.abs(window.scrollY + window.innerHeight - document.documentElement.scrollHeight) < 4;
-        if (!atBottom) window.scrollTo(0, document.documentElement.scrollHeight);
+
+        const doc = document.documentElement;
+        const atBottom = Math.abs(window.scrollY + window.innerHeight - doc.scrollHeight) < 4;
+        if (!atBottom) window.scrollTo(0, doc.scrollHeight);
+
+        // Track only changes in page height as a sign of new content.
+        const h = doc.scrollHeight;
+        if (Math.abs(h - lastH) > 2) { lastH = h; lastHChange = Date.now(); }
+
         iter++;
-        const idle = Date.now() - lastChange > idleMs;
-        if (atBottom && idle) { obs.disconnect(); return resolve({ stabilized: true }); }
-        if (iter > maxIters) { obs.disconnect(); return reject(new Error('This page appears unbounded (infinite feed).')); }
+        const heightIdle = Date.now() - lastHChange > idleMs;
+        if (atBottom && heightIdle) return resolve({ stabilized: true });
+        // If we hit the iteration cap, proceed anyway to avoid false
+        // endless-detection on dynamic but finite pages (e.g., video sites).
+        if (iter > maxIters) return resolve({ stabilized: true, reason: 'iter-cap' });
         setTimeout(step, 300);
       };
       step();
@@ -1086,7 +1095,7 @@
     try {
       const root = document.createElement('div');
       root.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:rgba(0,0,0,0.8);color:#fff;padding:8px 10px;border-radius:8px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,0.4);min-width:200px;pointer-events:auto;';
-      root.innerHTML = '<div id="gi-status">Starting...</div><div style="margin-top:6px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="gi-bar" style="height:100%;width:0%;background:#3b82f6;transition:width .2s ease"></div></div><div style="margin-top:6px;text-align:right"><button id="gi-stop" style="background:#ef4444;color:#fff;border:0;border-radius:4px;padding:4px 8px;cursor:pointer">Stop</button></div>';
+      root.innerHTML = '<div id="gi-status">Starting...</div><div style="margin-top:6px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="gi-bar" style="height:100%;width:0%;background:#3b82f6;transition:width .2s ease"></div></div><div style="margin-top:6px;text-align:right"><button id="gi-stop" style="background:#ef4444;color:#fff;border:0;border-radius:6px;padding:4px 8px;cursor:pointer">Stop</button></div>';
       document.documentElement.appendChild(root);
       const statusEl = root.querySelector('#gi-status');
       const barEl = root.querySelector('#gi-bar');

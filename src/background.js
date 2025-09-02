@@ -100,6 +100,19 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       } catch (e2) { console.error(e2); }
     }
   }
+  // Handle MHTML requests from content script
+  if (msg?.type === 'GETINSPIRE_MHTML') {
+    try {
+      const tabId = sender?.tab?.id;
+      if (!tabId) throw new Error('no-tab');
+      const blob = await chrome.pageCapture.saveAsMHTML({ tabId });
+      const ab = await blob.arrayBuffer();
+      chrome.tabs.sendMessage(tabId, { type: 'GETINSPIRE_MHTML_RESULT', id: msg.id, ok: true, arrayBuffer: ab });
+    } catch (e) {
+      try { chrome.tabs.sendMessage(sender?.tab?.id, { type: 'GETINSPIRE_MHTML_RESULT', id: msg.id, ok: false, error: String(e) }); } catch (e2) { console.error(e2); }
+    }
+    return;
+  }
 });
 
 // Context menu: Capture this page
@@ -123,20 +136,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     } catch (e) {
       chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) });
     }
-  }
-  // Save current tab as MHTML and reply with ArrayBuffer
-  if (msg?.type === 'GETINSPIRE_MHTML') {
-    try {
-      const tabId = sender?.tab?.id;
-      if (!tabId) throw new Error('no-tab');
-      const blob = await chrome.pageCapture.saveAsMHTML({ tabId });
-      const ab = await blob.arrayBuffer();
-      chrome.tabs.sendMessage(tabId, { type: 'GETINSPIRE_MHTML_RESULT', id: msg.id, ok: true, arrayBuffer: ab });
-    } catch (e) {
-      try { chrome.tabs.sendMessage(sender?.tab?.id, { type: 'GETINSPIRE_MHTML_RESULT', id: msg.id, ok: false, error: String(e) }); } catch (e2) { console.error(e2); }
-    }
-    return;
-  }
+  } 
 });
 
 // Keyboard shortcut: Capture via command
@@ -158,3 +158,22 @@ try {
     }
   });
 } catch (e) { console.error(e); }
+
+// Fallback for popup when scripting is blocked by policy
+chrome.runtime.onMessage.addListener(async (msg, sender) => {
+  if (msg?.type !== 'GETINSPIRE_SAVE_MHTML_DIRECT') return; // not ours
+  try {
+    const tabId = msg.tabId || (sender?.tab?.id);
+    if (!tabId) throw new Error('no-tab');
+    const blob = await chrome.pageCapture.saveAsMHTML({ tabId });
+    const url = (globalThis.URL || self.URL).createObjectURL(blob);
+    let pageUrl = '';
+    try { const [t] = await chrome.tabs.query({ active: true, currentWindow: true }); pageUrl = t?.url || ''; } catch {}
+    const host = (() => { try { return new URL(pageUrl).hostname.replace(/[^a-z0-9.-]/gi,'-'); } catch { return 'page'; } })();
+    const filename = `getinspire-mhtml-${host}-${new Date().toISOString().replace(/[:.]/g,'-')}.mhtml`;
+    await chrome.downloads.download({ url, filename, saveAs: true, conflictAction: 'uniquify' });
+    setTimeout(() => { try { (globalThis.URL || self.URL).revokeObjectURL(url); } catch (e) { console.error(e); } }, 30000);
+  } catch (e) {
+    chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) });
+  }
+});

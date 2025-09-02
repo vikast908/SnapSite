@@ -38,7 +38,19 @@ async function runCapture() {
       files: ['src/vendor/jszip.min.js', 'src/content.js']
     });
   } catch (e) {
-    setStatus('Error injecting scripts: ' + String(e));
+    const msg = String(e || '');
+    // Helpful guidance + fallback for sites that block scripting via policy
+    if (/ExtensionsSettings policy|cannot be scripted/i.test(msg)) {
+      setStatus('Site blocks scripting. Saving MHTML snapshot instead...');
+      try {
+        await chrome.runtime.sendMessage({ type: 'GETINSPIRE_SAVE_MHTML_DIRECT', tabId: currentTabId });
+        setStatus('Saved MHTML snapshot.');
+      } catch (e2) {
+        setStatus('Unable to save MHTML: ' + String(e2));
+      }
+    } else {
+      setStatus('Error injecting scripts: ' + msg);
+    }
     stopBtn.disabled = true;
     resetProgress();
   }
