@@ -167,14 +167,17 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
   try {
     const tabId = msg.tabId || (sender?.tab?.id);
     if (!tabId) throw new Error('no-tab');
+    let pageUrl = '';
+    try { const t = await chrome.tabs.get(tabId); pageUrl = t?.url || ''; } catch {}
+    // Popup is responsible for requesting any needed host permission under a
+    // user gesture. Here we just attempt the capture.
     const blob = await chrome.pageCapture.saveAsMHTML({ tabId });
+
     const URLRef = (globalThis.URL || self.URL);
     if (!URLRef || typeof URLRef.createObjectURL !== 'function') {
       throw new TypeError('URL.createObjectURL is not available in background');
     }
     const url = URLRef.createObjectURL(blob);
-    let pageUrl = '';
-    try { const [t] = await chrome.tabs.query({ active: true, currentWindow: true }); pageUrl = t?.url || ''; } catch {}
     const host = (() => { try { return new URL(pageUrl).hostname.replace(/[^a-z0-9.-]/gi,'-'); } catch { return 'page'; } })();
     const filename = `getinspire-mhtml-${host}-${new Date().toISOString().replace(/[:.]/g,'-')}.mhtml`;
     await chrome.downloads.download({ url, filename, saveAs: true, conflictAction: 'uniquify' });

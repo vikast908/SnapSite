@@ -41,8 +41,20 @@ async function runCapture() {
     const msg = String(e || '');
     // Helpful guidance + fallback for sites that block scripting via policy
     if (/ExtensionsSettings policy|cannot be scripted/i.test(msg)) {
-      setStatus('Site blocks scripting. Saving MHTML snapshot instead...');
+      setStatus('Site blocks scripting. Requesting permission, then saving MHTML...');
       try {
+        // Request per-origin permission under user gesture (popup click)
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const url = tabs?.[0]?.url || '';
+        let origin = '';
+        try { origin = new URL(url).origin + '/*'; } catch {}
+        if (origin) {
+          const have = await chrome.permissions.contains({ origins: [origin] }).catch(() => false);
+          if (!have) {
+            const ok = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
+            if (!ok) throw new Error('Permission denied for ' + origin);
+          }
+        }
         await chrome.runtime.sendMessage({ type: 'GETINSPIRE_SAVE_MHTML_DIRECT', tabId: currentTabId });
         setStatus('Saved MHTML snapshot.');
       } catch (e2) {

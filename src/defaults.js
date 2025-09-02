@@ -12,7 +12,7 @@ export const defaults = {
   saveWithoutPrompt: false,
   skipVideo: false,
   replaceIframesWithPoster: true,
-  stripScripts: false,
+  stripScripts: true,
   fontFallback: true,
   showOverlay: false,
   denylist: [

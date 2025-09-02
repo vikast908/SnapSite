@@ -13,7 +13,7 @@
     saveWithoutPrompt: false,
     skipVideo: false,
     replaceIframesWithPoster: true,
-    stripScripts: false,
+    stripScripts: true,
     denylist: [
       String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
       String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
