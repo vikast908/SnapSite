@@ -179,6 +179,8 @@
     const URLRef = (window.URL || self.URL);
     const blobUrl = URLRef.createObjectURL(blob);
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_DOWNLOAD_ZIP', blobUrl, filename });
+    // Revoke in the creating context as a fallback/safety
+    try { setTimeout(() => { try { URLRef.revokeObjectURL(blobUrl); } catch {} }, 30000); } catch {}
       try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: totalAssets, total: totalAssets }); } catch (e) { console.error(e); }
     sendStatus('Done.');
     cleanup();

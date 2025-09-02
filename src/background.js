@@ -80,7 +80,14 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         saveAs: !saveWithoutPrompt,
         conflictAction: 'uniquify'
       });
-      setTimeout(() => { try { (globalThis.URL || self.URL).revokeObjectURL(blobUrl); } catch (e) { console.error(e); } }, 30000);
+      setTimeout(() => {
+        try {
+          const URLRef = (globalThis.URL || self.URL);
+          if (URLRef && typeof URLRef.revokeObjectURL === 'function') {
+            URLRef.revokeObjectURL(blobUrl);
+          }
+        } catch (e) { /* ignore revoke failures */ }
+      }, 30000);
       chrome.runtime.sendMessage({ type: 'GETINSPIRE_DONE' });
       try {
         if (sender?.tab?.id) {
@@ -166,13 +173,24 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
     const tabId = msg.tabId || (sender?.tab?.id);
     if (!tabId) throw new Error('no-tab');
     const blob = await chrome.pageCapture.saveAsMHTML({ tabId });
-    const url = (globalThis.URL || self.URL).createObjectURL(blob);
+    const URLRef = (globalThis.URL || self.URL);
+    if (!URLRef || typeof URLRef.createObjectURL !== 'function') {
+      throw new TypeError('URL.createObjectURL is not available in background');
+    }
+    const url = URLRef.createObjectURL(blob);
     let pageUrl = '';
     try { const [t] = await chrome.tabs.query({ active: true, currentWindow: true }); pageUrl = t?.url || ''; } catch {}
     const host = (() => { try { return new URL(pageUrl).hostname.replace(/[^a-z0-9.-]/gi,'-'); } catch { return 'page'; } })();
     const filename = `getinspire-mhtml-${host}-${new Date().toISOString().replace(/[:.]/g,'-')}.mhtml`;
     await chrome.downloads.download({ url, filename, saveAs: true, conflictAction: 'uniquify' });
-    setTimeout(() => { try { (globalThis.URL || self.URL).revokeObjectURL(url); } catch (e) { console.error(e); } }, 30000);
+    setTimeout(() => {
+      try {
+        const URLRef2 = (globalThis.URL || self.URL);
+        if (URLRef2 && typeof URLRef2.revokeObjectURL === 'function') {
+          URLRef2.revokeObjectURL(url);
+        }
+      } catch (e) { /* ignore revoke failures */ }
+    }, 30000);
   } catch (e) {
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) });
   }
