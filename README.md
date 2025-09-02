@@ -53,13 +53,13 @@ graph LR
   P -->|Stop/Status| C
   C -->|DOM scan + collect URLs| D[Page DOM]
   C -->|normalize/lazyload fix| D
-  C -->|fetch assets (same-origin)| Net[Network]
+  C -->|fetch assets same origin| Net[Network]
   C -->|GETINSPIRE_FETCH (fallback)| B[Background SW]
   B -->|fetch with per-origin permission| Net
   C -->|build ZIP via JSZip| Z[Blob]
   C -->|send blobUrl + filename| B
   B -->|chrome.downloads.download| File[ZIP File]
-  Z -.->|quick-check.html, report/*| File
+  Z -.->|quick-check.html and report files| File
   P -->|shows progress/errors| A
   O[Options Page] -->|save settings| Sync[chrome.storage.sync]
   C -->|read defaults+options| Sync
@@ -75,7 +75,7 @@ flowchart TD
   collect --> fetch[Download assets with concurrency + caps]
   fetch --> rewrite[Rewrite index.html + CSS urls to local paths]
   rewrite --> report[Build report + manifest + quick-check]
-  report --> zip[Build ZIP (two-pass to embed report size)]
+  report --> zip[Build ZIP two pass embed report size]
   zip --> dl[Trigger download via background]
   dl --> done([Done])
 ```
@@ -142,4 +142,3 @@ Developer Notes
 - Testing tips:
   - Use the Quick Check page in the ZIP for a fast sanity pass.
   - Inspect `report/README.md` and `report/asset-manifest.json` for coverage and failures.
-
