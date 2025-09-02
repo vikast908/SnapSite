@@ -41,8 +41,12 @@
     skipVideo: document.getElementById('skipVideo'),
     replaceIframesWithPoster: document.getElementById('replaceIframesWithPoster'),
     stripScripts: document.getElementById('stripScripts'),
+    showOverlay: document.getElementById('showOverlay'),
+    fontFallback: document.getElementById('fontFallback'),
     saveBtn: document.getElementById('saveBtn'),
-    saved: document.getElementById('saved')
+    saved: document.getElementById('saved'),
+    presetSocial: document.getElementById('presetSocial'),
+    presetSearch: document.getElementById('presetSearch'),
   };
 
   function load() {
@@ -57,6 +61,8 @@
       els.skipVideo.checked = v.skipVideo ?? defaults.skipVideo;
       els.replaceIframesWithPoster.checked = v.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster;
       els.stripScripts.checked = v.stripScripts ?? defaults.stripScripts;
+      if (els.showOverlay) els.showOverlay.checked = v.showOverlay ?? defaults.showOverlay;
+      if (els.fontFallback) els.fontFallback.checked = v.fontFallback ?? defaults.fontFallback;
       const list = (Array.isArray(v.denylist) ? v.denylist : defaults.denylist)
         .map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
       els.denylist.value = list;
@@ -84,6 +90,8 @@
       skipVideo: Boolean(els.skipVideo.checked),
       replaceIframesWithPoster: Boolean(els.replaceIframesWithPoster.checked),
       stripScripts: Boolean(els.stripScripts.checked),
+      showOverlay: Boolean(els.showOverlay && els.showOverlay.checked),
+      fontFallback: Boolean(els.fontFallback && els.fontFallback.checked),
       denylist: deny
     };
 
@@ -95,4 +103,32 @@
 
   els.saveBtn.addEventListener('click', save);
   document.addEventListener('DOMContentLoaded', load);
+
+  function addPreset(lines) {
+    const current = els.denylist.value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+    const set = new Set(current);
+    for (const ln of lines) set.add(ln);
+    els.denylist.value = Array.from(set).join('\n');
+  }
+
+  // Common presets
+  const presetSocial = [
+    String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
+    String(/https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i),
+    String(/https?:\/\/([^\/]+\.)?(reddit\.com)\//i),
+    String(/https?:\/\/([^\/]+\.)?linkedin\.com\/feed/i),
+    String(/https?:\/\/([^\/]+\.)?pinterest\.[^\/]+\//i),
+    String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i),
+  ];
+  const presetSearch = [
+    String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
+    String(/https?:\/\/(www\.)?bing\.com\/search/i),
+    String(/https?:\/\/(www\.)?duckduckgo\.com\//i),
+    String(/https?:\/\/(www\.)?yandex\.[^\/]+\/search/i),
+    String(/https?:\/\/(www\.)?baidu\.[^\/]+\/s/i),
+    String(/https?:\/\/news\.google\.com\//i),
+  ];
+
+  if (els.presetSocial) els.presetSocial.addEventListener('click', () => addPreset(presetSocial));
+  if (els.presetSearch) els.presetSearch.addEventListener('click', () => addPreset(presetSearch));
 })();

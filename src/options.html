@@ -57,15 +57,33 @@
         <input id="replaceIframesWithPoster" type="checkbox" /> Replace external videos/iframes with thumbnails
       </label>
     </div>
-    <div class="row">
-      <label>
-        <input id="stripScripts" type="checkbox" /> Strip scripts and inline handlers for offline safety
-      </label>
-    </div>
-    <div class="row">
-      <button id="saveBtn">Save</button>
-      <span id="saved" style="margin-left:8px;color:green;display:none;">Saved</span>
-    </div>
-    <script type="module" src="options.js"></script>
+      <div class="row">
+        <label>
+          <input id="stripScripts" type="checkbox" /> Strip scripts and inline handlers for offline safety
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          <input id="showOverlay" type="checkbox" /> Show in-page progress overlay during capture
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          <input id="fontFallback" type="checkbox" /> Enable font fallback (improve offline rendering)
+        </label>
+      </div>
+      <div class="row">
+        <strong>Presets:</strong>
+        <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="presetSocial" type="button">Add Social Feeds</button>
+          <button id="presetSearch" type="button">Add Search Pages</button>
+        </div>
+        <small style="display:block; color:#64748b;">Adds common denylist patterns to the textarea above. Click Save to apply.</small>
+      </div>
+      <div class="row">
+        <button id="saveBtn">Save</button>
+        <span id="saved" style="margin-left:8px;color:green;display:none;">Saved</span>
+      </div>
+      <script type="module" src="options.js"></script>
   </body>
   </html>
