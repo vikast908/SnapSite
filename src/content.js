@@ -297,8 +297,9 @@
     ];
     for (const sel of attrSelectors) rootDoc.querySelectorAll(sel).forEach(el => candidates.add(el));
 
-    // ID/class hints
-    const hintRe = /(user|account|profile|email|token|auth|dashboard|name|customer|member|secure|private)/i;
+    // ID/class hints (kept conservative to avoid false positives)
+    // Removed overly-generic terms like "name", "member", "customer", and "dashboard".
+    const hintRe = /(user|username|account|profile|email|token|auth|secure|private)/i;
     rootDoc.querySelectorAll('*').forEach(el => {
       if (hintRe.test(el.id) || Array.from(el.classList || []).some(c => hintRe.test(c))) candidates.add(el);
     });

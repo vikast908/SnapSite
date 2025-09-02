@@ -8,7 +8,8 @@
     requestTimeoutMs: 20_000,
     scrollIdleMs: 2_000,
     maxScrollIterations: 200,
-    redact: true,
+    // Keep in sync with src/defaults.js
+    redact: false,
     saveWithoutPrompt: false,
     skipVideo: false,
     replaceIframesWithPoster: true,

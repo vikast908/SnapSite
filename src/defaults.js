@@ -6,7 +6,9 @@ export const defaults = {
   requestTimeoutMs: 20_000,
   scrollIdleMs: 2_000,
   maxScrollIterations: 200,
-  redact: true,
+  // Redaction replaces matched text with lorem-ipsum in the saved HTML.
+  // Default to false to avoid surprising users with "text junk" captures.
+  redact: false,
   saveWithoutPrompt: false,
   skipVideo: false,
   replaceIframesWithPoster: true,
