@@ -72,6 +72,20 @@
       await normalizePageForSnapshot({ includeVideo: !options.skipVideo });
     } catch (e) { console.error(e); }
 
+    // For highly dynamic apps (e.g., YouTube), wait for real content to
+    // replace skeletons before snapshotting. This avoids saving a page of
+    // placeholders.
+    try {
+      const host = location.hostname || '';
+      const path = location.pathname || '';
+      const isYouTube = /(^|\.)youtube\.com$/i.test(host);
+      const isPlaylistSurface = /\/playlist|\/feed\/playlists/i.test(path);
+      if (isYouTube && isPlaylistSurface) {
+        sendStatus('Waiting for playlists to render...');
+        await waitForYouTubePlaylistReady(9000).catch(()=>{});
+      }
+    } catch (e) { console.error(e); }
+
     // Redaction happens on cloned snapshot below (not mutating live DOM)
 
     // Collect assets & initial HTML snapshot
@@ -124,7 +138,10 @@
 
     // Rewrite HTML and CSS to local paths
     sendStatus('Rewriting HTML & CSS...');
-    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts, { stripScripts: options.stripScripts, iframeRepls: collected.iframeRepls || [], fontFallback: options.fontFallback });
+    // Force-strip scripts on YouTube so the saved page renders as a static
+    // snapshot offline (their app JS tends to blank the DOM when network is missing).
+    const ytForceStrip = ((/(^|\.)youtube\.com$/i.test(location.hostname||'')) && /\/playlist|\/feed\/playlists/i.test(location.pathname||''));
+    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts, { stripScripts: ytForceStrip || options.stripScripts, iframeRepls: collected.iframeRepls || [], fontFallback: options.fontFallback });
 
     // Assemble report content
     state.report.pageUrl = location.href;
@@ -993,6 +1010,31 @@
     </script>
   </body>
   </html>`;
+  }
+
+  // ---- Site-specific waits ----
+  async function waitForYouTubePlaylistReady(timeoutMs = 8000) {
+    const t0 = Date.now();
+    const ok = () => {
+      try {
+        // Consider ready when at least one playlist renderer has a thumbnail
+        // image with a resolved http(s) src (not data:), or when shimmer is gone
+        const items = Array.from(document.querySelectorAll('ytd-playlist-renderer'));
+        const hasThumb = items.some(i => {
+          const im = i.querySelector('img');
+          return im && typeof im.src === 'string' && /^https?:/i.test(im.src);
+        });
+        const shimmering = document.querySelector('ytd-shimmer, [animated][hidden][aria-busy="true"]');
+        return (items.length > 0 && hasThumb) || !shimmering;
+      } catch { return false; }
+    };
+    while (Date.now() - t0 < timeoutMs) {
+      if (ok()) return true;
+      // Nudge scroll to trigger lazy loading
+      try { window.scrollBy(0, 200); } catch {}
+      await new Promise(r => setTimeout(r, 300));
+    }
+    return false;
   }
 
   function buildReadme(report) {
