@@ -141,7 +141,22 @@
     // Force-strip scripts on YouTube so the saved page renders as a static
     // snapshot offline (their app JS tends to blank the DOM when network is missing).
     const ytForceStrip = ((/(^|\.)youtube\.com$/i.test(location.hostname||'')) && /\/playlist|\/feed\/playlists/i.test(location.pathname||''));
-    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts, { stripScripts: ytForceStrip || options.stripScripts, iframeRepls: collected.iframeRepls || [], fontFallback: options.fontFallback });
+    // Site-specific CSS fixes (applied inline to the saved HTML)
+    let siteCss = '';
+    try {
+      const isYT = /(^|\.)youtube\.com$/i.test(location.hostname||'');
+      if (isYT) {
+        siteCss += [
+          // Hide transient spinners/overlays and top nav progress bar
+          'ytd-thumbnail-overlay-loading-preview-renderer,',
+          'tp-yt-paper-spinner,',
+          'paper-spinner,',
+          'yt-page-navigation-progress,',
+          'ytd-shimmer { display: none !important; }',
+        ].join('\n');
+      }
+    } catch {}
+    const htmlRewritten = await rewriteHtmlAndCss(htmlForRewrite, dres.map, collected.inlineCssTexts, { stripScripts: ytForceStrip || options.stripScripts, iframeRepls: collected.iframeRepls || [], fontFallback: options.fontFallback, siteCss });
 
     // Assemble report content
     state.report.pageUrl = location.href;
@@ -155,10 +170,10 @@
     let mhtmlAb = null;
     try { mhtmlAb = await getMHTML(8000).catch(() => null); } catch {}
 
-    // Prefer MHTML launcher for YouTube playlists when available (Shadow DOM
-    // heavy and more reliable), fall back to rewritten HTML otherwise.
-    const preferMhtml = ((/(^|\.)youtube\.com$/i.test(location.hostname||'')) && /\/playlist|\/feed\/playlists/i.test(location.pathname||''));
-    const indexHtmlOut = (preferMhtml && mhtmlAb) ? mhtmlLauncherHtml() : bannered(htmlRewritten);
+    // Use rewritten HTML as the primary index to avoid blank pages on systems
+    // where file:// MHTML viewing is disabled. MHTML is still included as an
+    // artifact under report/page.mhtml.
+    const indexHtmlOut = bannered(htmlRewritten);
 
     // Build ZIP with two-pass to embed accurate report size
     sendStatus('Packing ZIP...');
@@ -568,7 +583,7 @@
       add(val);
     });
 
-    const html = '<!doctype html>\n' + document.documentElement.outerHTML;
+    const html = serializeDomWithDeclarativeShadowDom();
     return { urls, html, skipped, inlineCssTexts, totalAssetCandidates: urls.size, iframeRepls };
   }
 
@@ -586,6 +601,52 @@
     const re = /@import\s+(?:url\()?\s*['"]?([^'"\)]+)['"]?\s*\)?/g; let m;
     while ((m = re.exec(cssText))) out.push(m[1]);
     return out;
+  }
+
+  // Serialize the current document to HTML and materialize shadow DOM
+  // into Declarative Shadow DOM (<template shadowroot="open">) so that
+  // components such as YouTube's Polymer elements render offline.
+  function serializeDomWithDeclarativeShadowDom() {
+    try {
+      const marker = 'data-getinspire-shadow-host';
+      const hosts = [];
+      let counter = 0;
+      // Mark hosts that have an open shadow root and collect their HTML
+      document.querySelectorAll('*').forEach(el => {
+        try {
+          if (el.shadowRoot) {
+            const id = 's' + (++counter);
+            el.setAttribute(marker, id);
+            let html = '';
+            try { html = el.shadowRoot.innerHTML || ''; } catch {}
+            hosts.push({ id, html });
+          }
+        } catch {}
+      });
+
+      const raw = '<!doctype html>\n' + document.documentElement.outerHTML;
+
+      // Clean markers from the live page right away (best-effort)
+      try { document.querySelectorAll('[' + marker + ']').forEach(el => el.removeAttribute(marker)); } catch {}
+
+      const parsed = new DOMParser().parseFromString(raw, 'text/html');
+      for (const h of hosts) {
+        try {
+          const host = parsed.querySelector('[' + marker + '="' + h.id + '"]');
+          if (!host) continue;
+          try { host.removeAttribute(marker); } catch {}
+          const tmpl = parsed.createElement('template');
+          // Use the widely supported attribute name
+          tmpl.setAttribute('shadowroot', 'open');
+          tmpl.innerHTML = h.html || '';
+          host.insertBefore(tmpl, host.firstChild);
+        } catch {}
+      }
+      return '<!doctype html>\n' + parsed.documentElement.outerHTML;
+    } catch (e) {
+      // Fallback to plain outerHTML if anything goes wrong
+      try { return '<!doctype html>\n' + document.documentElement.outerHTML; } catch { return '<!doctype html>'; }
+    }
   }
 
   async function downloadAllAssets(urls, cfg) {
@@ -821,6 +882,11 @@
     if (opts.fontFallback) {
       const safetyCss = `\n<style id="getinspire-safety">img{max-width:100%;height:auto}.sr-only,.sr-only-focusable:not(:focus){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>`;
       html = html.replace(/<head\b[^>]*>/i, (m) => m + safetyCss);
+    }
+    // Site-specific CSS fixes injection
+    if (opts.siteCss) {
+      const siteCssTag = `\n<style id="getinspire-site-fixes">${opts.siteCss}</style>`;
+      html = html.replace(/<head\b[^>]*>/i, (m) => m + siteCssTag);
     }
 
     // Add optional font fallback for better symbol rendering (₹ etc.)
