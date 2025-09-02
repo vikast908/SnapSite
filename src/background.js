@@ -80,14 +80,9 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         saveAs: !saveWithoutPrompt,
         conflictAction: 'uniquify'
       });
-      setTimeout(() => {
-        try {
-          const URLRef = (globalThis.URL || self.URL);
-          if (URLRef && typeof URLRef.revokeObjectURL === 'function') {
-            URLRef.revokeObjectURL(blobUrl);
-          }
-        } catch (e) { /* ignore revoke failures */ }
-      }, 30000);
+      // Note: the object URL is created in the content script and revoked there.
+      // We avoid revoking from the service worker to prevent runtime errors in
+      // environments where URL.revokeObjectURL is not available.
       chrome.runtime.sendMessage({ type: 'GETINSPIRE_DONE' });
       try {
         if (sender?.tab?.id) {
@@ -183,14 +178,8 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
     const host = (() => { try { return new URL(pageUrl).hostname.replace(/[^a-z0-9.-]/gi,'-'); } catch { return 'page'; } })();
     const filename = `getinspire-mhtml-${host}-${new Date().toISOString().replace(/[:.]/g,'-')}.mhtml`;
     await chrome.downloads.download({ url, filename, saveAs: true, conflictAction: 'uniquify' });
-    setTimeout(() => {
-      try {
-        const URLRef2 = (globalThis.URL || self.URL);
-        if (URLRef2 && typeof URLRef2.revokeObjectURL === 'function') {
-          URLRef2.revokeObjectURL(url);
-        }
-      } catch (e) { /* ignore revoke failures */ }
-    }, 30000);
+    // Do not attempt to revoke from the service worker; if an offscreen
+    // document is introduced for MHTML in the future, handle revocation there.
   } catch (e) {
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) });
   }

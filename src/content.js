@@ -138,8 +138,10 @@
     let mhtmlAb = null;
     try { mhtmlAb = await getMHTML(8000).catch(() => null); } catch {}
 
-    // Prefer MHTML as primary index when available (better for Shadow DOM sites like YouTube)
-    const indexHtmlOut = mhtmlAb ? mhtmlLauncherHtml() : bannered(htmlRewritten);
+    // Always use rewritten HTML as primary index to avoid blank pages on
+    // environments that cannot render MHTML from file://. Still include the
+    // MHTML as an extra artifact for users who prefer it.
+    const indexHtmlOut = bannered(htmlRewritten);
 
     // Build ZIP with two-pass to embed accurate report size
     sendStatus('Packing ZIP...');
