@@ -138,17 +138,20 @@
     let mhtmlAb = null;
     try { mhtmlAb = await getMHTML(8000).catch(() => null); } catch {}
 
+    // Prefer MHTML as primary index when available (better for Shadow DOM sites like YouTube)
+    const indexHtmlOut = mhtmlAb ? mhtmlLauncherHtml() : bannered(htmlRewritten);
+
     // Build ZIP with two-pass to embed accurate report size
     sendStatus('Packing ZIP...');
     const { blob: blob1 } = await buildZip({
-      indexHtml: bannered(htmlRewritten),
+      indexHtml: indexHtmlOut,
       assets: dres.map,
       reportJson: JSON.stringify(state.report, null, 2),
       readmeMd: buildReadme(state.report),
       quickCheckHtml: quickCheckHtml(state.report),
       extras: [
         { path: 'report/asset-manifest.json', type: 'text', data: JSON.stringify(manifest, null, 2) },
-        ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'arrayBuffer', data: mhtmlAb }] : [])
+        ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'blob', data: new Blob([mhtmlAb], { type: 'multipart/related' }) }] : [])
       ],
       sizeCap: options.maxZipMB * 1024 * 1024,
     });
@@ -156,14 +159,14 @@
     state.report.stats.durationMs = Date.now() - state.started;
 
     const { blob } = await buildZip({
-      indexHtml: bannered(htmlRewritten),
+      indexHtml: indexHtmlOut,
       assets: dres.map,
       reportJson: JSON.stringify(state.report, null, 2),
       readmeMd: buildReadme(state.report),
       quickCheckHtml: quickCheckHtml(state.report),
       extras: [
         { path: 'report/asset-manifest.json', type: 'text', data: JSON.stringify(manifest, null, 2) },
-        ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'arrayBuffer', data: mhtmlAb }] : [])
+        ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'blob', data: new Blob([mhtmlAb], { type: 'multipart/related' }) }] : [])
       ],
       sizeCap: options.maxZipMB * 1024 * 1024,
     });
@@ -210,6 +213,12 @@
 
   function bannered(html) {
     return `<!-- Saved by GetInspire on ${new Date().toISOString()} from ${location.href} -->\n` + html;
+  }
+
+  function mhtmlLauncherHtml() {
+    const target = 'report/page.mhtml';
+    const html = `<!doctype html>\n<html><head><meta charset="utf-8" />\n<meta http-equiv="refresh" content="0; url=${target}">\n<title>GetInspire Snapshot</title>\n<style>body{font:14px system-ui,sans-serif;padding:16px}</style></head>\n<body>\n<p>If you are not redirected, open <a href="${target}">page.mhtml</a>.</p>\n</body></html>`;
+    return bannered(html);
   }
 
   async function loadOptions() {
@@ -897,10 +906,12 @@
     zip.file('report/fetch-report.json', reportJson);
     for (const ex of extras) {
       try {
-        if (ex.type === 'text') zip.file(ex.path, ex.data);
-        else if (ex.type === 'arrayBuffer') zip.file(ex.path, ex.data);
-        else if (ex.type === 'blob') zip.file(ex.path, ex.data);
-      } catch (e) { console.error(e); }
+        let data = ex.data;
+        if (ex.type === 'text' && typeof data !== 'string') data = String(data);
+        if (ex.type === 'arrayBuffer' && data && data.byteLength !== undefined && !(data instanceof Uint8Array)) data = new Uint8Array(data);
+        if (data instanceof ArrayBuffer) data = new Uint8Array(data);
+        zip.file(ex.path, data);
+      } catch (e) { console.error('Failed to add extra to ZIP:', ex?.path, e); }
     }
     for (const [_, entry] of assets) {
       zip.file(entry.path, entry.blob);
