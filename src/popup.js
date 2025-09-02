@@ -11,6 +11,7 @@ const videoBtn = document.getElementById('videoBtn');
 const videoPanel = document.getElementById('videoPanel');
 const videoPanelStatus = document.getElementById('videoPanelStatus');
 const videoList = document.getElementById('videoList');
+const ytdlpList = document.getElementById('ytdlpList');
 
 let currentTabId = null;
 let startedAt = 0;
@@ -169,7 +170,7 @@ if (videoBtn) videoBtn.addEventListener('click', async (e) => {
     }
     // Open panel and show loading
     videoPanel.classList.add('open');
-    videoList.style.display = 'none';
+    videoList.style.display = 'none'; if (ytdlpList) ytdlpList.style.display = 'none';
     videoPanelStatus.textContent = 'Detecting video...';
 
     const tabId = await getActiveTabId();
@@ -267,14 +268,12 @@ if (videoBtn) videoBtn.addEventListener('click', async (e) => {
         try {
           videoPanelStatus.textContent = 'Preparing...';
           videoList.style.display = 'none';
-          // Pre-request host permission only for streaming (HLS). Direct files don't need it.
-          if ((v.type||'').toLowerCase() !== 'file'){
-            const urls = [candidateUrl, v.url].filter(Boolean);
-            const patterns = [];
-            for (const u of urls){ try { const o = new URL(u).origin + '/*'; if (!patterns.includes(o)) patterns.push(o); } catch {} }
-            const granted = await ensureOrigins(patterns);
-            if (!granted) { videoPanelStatus.textContent = 'Permission denied for video host'; return; }
-          }
+          // Pre-request host permission under user gesture for all video hosts
+          const urls = [candidateUrl, v.url].filter(Boolean);
+          const patterns = [];
+          for (const u of urls){ try { const o = new URL(u).origin + '/*'; if (!patterns.includes(o)) patterns.push(o); } catch {} }
+          const granted = await ensureOrigins(patterns);
+          if (!granted) { videoPanelStatus.textContent = 'Permission denied for video host'; return; }
           chrome.runtime.sendMessage({ type:'GETINSPIRE_VIDEO_DOWNLOAD', variant: v, from: candidateUrl });
           videoPanel.classList.remove('open');
         } catch (err) {
@@ -285,6 +284,43 @@ if (videoBtn) videoBtn.addEventListener('click', async (e) => {
     }
     videoPanelStatus.textContent = 'Choose quality:';
     videoList.style.display = '';
+
+    // Also offer yt-dlp fallback (best quality) using page URL for robust downloads
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const pageUrl = tabs?.[0]?.url || '';
+      if (pageUrl && ytdlpList) {
+        ytdlpList.innerHTML = '';
+        const bestItem = document.createElement('div'); bestItem.className = 'video-item';
+        const bestLabel = document.createElement('div'); bestLabel.textContent = 'yt-dlp (best)';
+        const bestBtn = document.createElement('button'); bestBtn.textContent = 'Download';
+        bestBtn.addEventListener('click', async () => {
+          videoPanelStatus.textContent = 'Handing off to yt-dlp...';
+          videoList.style.display = 'none'; ytdlpList.style.display = 'none';
+          chrome.runtime.sendMessage({ type: 'GETINSPIRE_YTDLP_DOWNLOAD', url: pageUrl, format: 'bestvideo*+bestaudio/best' });
+          videoPanel.classList.remove('open');
+        });
+        bestItem.appendChild(bestLabel); bestItem.appendChild(bestBtn); ytdlpList.appendChild(bestItem);
+
+        // Optional: show a probe of available formats (quick)
+        const resp = await new Promise((resolve)=>{
+          chrome.runtime.sendMessage({ type:'GETINSPIRE_YTDLP_PROBE', url: pageUrl }, (r)=> resolve(r));
+        });
+        if (resp?.ok && Array.isArray(resp.formats) && resp.formats.length){
+          for (const f of resp.formats.slice(0,6)){
+            const it = document.createElement('div'); it.className='video-item';
+            const l = document.createElement('div'); l.textContent = `yt-dlp ${f.height?f.height+'p ':''}${f.ext||''} ${f.fps?f.fps+'fps ':''}`.trim();
+            const b = document.createElement('button'); b.textContent = 'Download';
+            b.addEventListener('click', ()=>{
+              chrome.runtime.sendMessage({ type:'GETINSPIRE_YTDLP_DOWNLOAD', url: pageUrl, format: String(f.format_id||'best') });
+              videoPanel.classList.remove('open');
+            });
+            it.appendChild(l); it.appendChild(b); ytdlpList.appendChild(it);
+          }
+        }
+        ytdlpList.style.display = '';
+      }
+    } catch {}
   } catch (err) {
     videoPanelStatus.textContent = 'Error: ' + String(err);
   }

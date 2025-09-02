@@ -142,6 +142,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true;
   }
+  if (msg?.type === 'GETINSPIRE_YTDLP_PROBE') {
+    (async () => {
+      try {
+        const info = await ytdlpProbe(msg.url);
+        sendResponse(info);
+      } catch (e) { sendResponse({ ok: false, error: String(e) }); }
+    })();
+    return true;
+  }
+  if (msg?.type === 'GETINSPIRE_YTDLP_DOWNLOAD') {
+    (async () => {
+      try {
+        await ytdlpDownload(msg.url, msg.format || 'bestvideo*+bestaudio/best');
+        sendResponse({ ok: true });
+      } catch (e) { try { chrome.runtime.sendMessage({ type:'GETINSPIRE_ERROR', error:String(e) }); } catch {}; sendResponse({ ok: false, error: String(e) }); }
+    })();
+    return true;
+  }
 });
 
 async function analyzeVideoUrl(urlStr, sender){
@@ -244,22 +262,10 @@ async function downloadVideoVariant(variant, sender){
 
     // If it's an explicit file variant, skip fetching and let the browser download directly
     if (String(variant?.type||'').toLowerCase() === 'file'){
-      const host = (() => { try { return new URL(url).hostname.replace(/[^a-z0-9.-]/gi,'-'); } catch { return 'video'; } })();
-      const ext = (() => {
-        // Prefer explicit extension from URL; otherwise infer from mime
-        const m = (url.split('?')[0]||'').match(/\.(mp4|webm|ogg|mov|m4v)$/i);
-        if (m) return m[1].toLowerCase();
-        const mt = String(variant.mimeType||'');
-        if (/webm/i.test(mt)) return 'webm';
-        if (/ogg|ogv/i.test(mt)) return 'ogv';
-        if (/quicktime|mov/i.test(mt)) return 'mov';
-        return 'mp4';
-      })();
-      const filename = `getinspire-video-${host}-${new Date().toISOString().replace(/[:.]/g,'-')}.${ext}`;
-      const { getinspireOptions } = await chrome.storage.sync.get('getinspireOptions');
-      const saveWithoutPrompt = Boolean(getinspireOptions?.saveWithoutPrompt);
-      await chrome.downloads.download({ url, filename, saveAs: !saveWithoutPrompt, conflictAction: 'uniquify' });
-      try { chrome.runtime.sendMessage({ type:'GETINSPIRE_VIDEO_STATUS', text:'Video download started' }); } catch {}
+      const same = (() => { try { return new URL(url).origin === (sender?.origin || sender?.url && new URL(sender.url).origin); } catch { return false; } })();
+      const can = await ensureHostPermissionFor(url, same);
+      if (!can) throw new Error('Permission denied for video host');
+      await downloadDirectFileByFetch(url, variant);
       return;
     }
 
@@ -327,6 +333,148 @@ async function downloadVideoVariant(variant, sender){
   } finally {
     __videoDownloading = false;
   }
+}
+
+async function downloadDirectFileByFetch(url, variant){
+  // Special-case Googlevideo (YouTube CDN): require Referer to youtube and often blocks CORS.
+  try {
+    const host = new URL(url).hostname;
+    if (/\.googlevideo\.com$/i.test(host)){
+      // Ensure dynamic DNR rule to set Referer/Origin for googlevideo requests
+      try { await ensureGoogleVideoHeaderRule(); } catch {}
+      const ref = 'https://www.youtube.com/';
+      const mt = String(variant?.mimeType||'video/mp4');
+      const ext = mt.includes('webm') ? 'webm' : mt.includes('ogg')||mt.includes('ogv') ? 'ogv' : mt.includes('mov') ? 'mov' : 'mp4';
+      const safeHost = host.replace(/[^a-z0-9.-]/gi,'-');
+      const filename = `getinspire-video-${safeHost}-${new Date().toISOString().replace(/[:.]/g,'-')}.${ext}`;
+      const { getinspireOptions } = await chrome.storage.sync.get('getinspireOptions');
+      const saveWithoutPrompt = Boolean(getinspireOptions?.saveWithoutPrompt);
+      // downloads API may ignore headers param in some channels; DNR rule ensures headers are set
+      await chrome.downloads.download({ url, filename, saveAs: !saveWithoutPrompt, conflictAction: 'uniquify', headers: [ `Referer: ${ref}`, `Origin: https://www.youtube.com` ] });
+      try { chrome.runtime.sendMessage({ type:'GETINSPIRE_VIDEO_STATUS', text:'Video download started' }); } catch {}
+      return;
+    }
+  } catch {}
+
+  // Attempt a chunked fetch with Range to avoid failures with downloads API and to set a correct mime/filename.
+  const head = await fetch(url, { method: 'HEAD', credentials: 'include', mode: 'cors' }).catch(()=>null);
+  const total = Number(head?.headers?.get('content-length') || 0) || 0;
+  const contentType = (head?.headers?.get('content-type') || String(variant?.mimeType||'video/mp4'));
+  const size = total || null;
+  const chunkSize = 8 * 1024 * 1024; // 8MB
+  const chunks = [];
+  let downloaded = 0;
+  let pos = 0;
+  const report = (d,t) => { try { chrome.runtime.sendMessage({ type:'GETINSPIRE_VIDEO_PROGRESS', done:d, total: t || (size?Math.ceil(size/chunkSize):100) }); } catch {} };
+  // If Content-Length unavailable, try a single GET
+  if (!size){
+    const r = await fetch(url, { credentials:'include', mode:'cors' });
+    if (!r.ok) throw new Error('Download failed: ' + r.status);
+    const ab = await r.arrayBuffer();
+    chunks.push(ab); downloaded = 1; report(downloaded, 1);
+  } else {
+    const totalParts = Math.ceil(size / chunkSize);
+    for (let part=0; part<totalParts; part++){
+      const end = Math.min(size-1, pos + chunkSize - 1);
+      const r = await fetch(url, { headers: { 'Range': `bytes=${pos}-${end}` }, credentials: 'include', mode: 'cors' });
+      if (!(r.ok || r.status === 206)) throw new Error('Range request failed: ' + r.status);
+      const ab = await r.arrayBuffer();
+      chunks.push(ab);
+      pos = end + 1;
+      downloaded = part + 1;
+      report(downloaded, totalParts);
+    }
+  }
+  const blob = new Blob(chunks, { type: /video\//i.test(contentType) ? contentType : (String(variant?.mimeType||'video/mp4')) });
+  const URLRef = (globalThis.URL || self.URL);
+  const blobUrl = URLRef.createObjectURL(blob);
+  const host = (() => { try { return new URL(url).hostname.replace(/[^a-z0-9.-]/gi,'-'); } catch { return 'video'; } })();
+  const ext = (() => {
+    const m = (url.split('?')[0]||'').match(/\.(mp4|webm|ogg|mov|m4v)$/i);
+    if (m) return m[1].toLowerCase();
+    const mt = (contentType||'').toLowerCase();
+    if (mt.includes('webm')) return 'webm';
+    if (mt.includes('ogg')||mt.includes('ogv')) return 'ogv';
+    if (mt.includes('quicktime')||mt.includes('mov')) return 'mov';
+    return 'mp4';
+  })();
+  const filename = `getinspire-video-${host}-${new Date().toISOString().replace(/[:.]/g,'-')}.${ext}`;
+  const { getinspireOptions } = await chrome.storage.sync.get('getinspireOptions');
+  const saveWithoutPrompt = Boolean(getinspireOptions?.saveWithoutPrompt);
+  await chrome.downloads.download({ url: blobUrl, filename, saveAs: !saveWithoutPrompt, conflictAction: 'uniquify' });
+  try { chrome.runtime.sendMessage({ type:'GETINSPIRE_VIDEO_STATUS', text:'Video download started' }); } catch {}
+  setTimeout(()=>{ try { URLRef.revokeObjectURL(blobUrl); } catch {} }, 30000);
+}
+
+async function ensureGoogleVideoHeaderRule(){
+  const ruleId = 941001;
+  const rule = {
+    id: ruleId,
+    priority: 1,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: [
+        { header: 'referer', operation: 'set', value: 'https://www.youtube.com/' },
+        { header: 'origin', operation: 'set', value: 'https://www.youtube.com' }
+      ]
+    },
+    condition: {
+      regexFilter: '^https?:\/\/([a-z0-9.-]+\.)?googlevideo\.com\/.*',
+      requestDomains: ['googlevideo.com'],
+      isUrlFilterCaseSensitive: false,
+      resourceTypes: ['main_frame','sub_frame','xmlhttprequest','media','other']
+    }
+  };
+  try {
+    // remove existing then add fresh to ensure state
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [ruleId] });
+  } catch {}
+  await chrome.declarativeNetRequest.updateDynamicRules({ addRules: [rule] });
+}
+
+// ---- yt-dlp native helper bridge ----
+async function ytdlpProbe(url){
+  try {
+    const resp = await chrome.runtime.sendNativeMessage('com.getinspire.ytdlp', { cmd: 'probe', url });
+    return resp && resp.ok ? resp : { ok:false, error: resp?.error || 'probe-failed' };
+  } catch (e) { return { ok:false, error:String(e) }; }
+}
+
+async function ytdlpDownload(url, format){
+  const port = chrome.runtime.connectNative('com.getinspire.ytdlp');
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const onMessage = (msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'progress') {
+        try { chrome.runtime.sendMessage({ type:'GETINSPIRE_VIDEO_PROGRESS', done: msg.part||msg.pct||0, total: msg.total||100 }); } catch {}
+      } else if (msg.type === 'status') {
+        try { chrome.runtime.sendMessage({ type:'GETINSPIRE_VIDEO_STATUS', text: String(msg.text||'') }); } catch {}
+      } else if (msg.type === 'error') {
+        done = true; cleanup(); reject(new Error(String(msg.error||'yt-dlp error')));
+      } else if (msg.type === 'done') {
+        done = true; cleanup(); resolve();
+      }
+    };
+    const onDisconnect = () => {
+      if (done) return;
+      const errMsg = chrome.runtime.lastError?.message || 'yt-dlp host disconnected';
+      try { chrome.runtime.sendMessage({ type:'GETINSPIRE_ERROR', error: errMsg }); } catch {}
+      openSetupTab();
+      reject(new Error(errMsg));
+    };
+    function cleanup(){ try { port.onMessage.removeListener(onMessage); port.onDisconnect.removeListener(onDisconnect); } catch {} }
+    port.onMessage.addListener(onMessage);
+    port.onDisconnect.addListener(onDisconnect);
+    port.postMessage({ cmd: 'download', url, format });
+  });
+}
+
+function openSetupTab(){
+  try {
+    const url = chrome.runtime.getURL('src/setup.html');
+    chrome.tabs.create({ url });
+  } catch {}
 }
 
 // Context menu: Capture this page
