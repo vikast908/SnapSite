@@ -54,7 +54,7 @@ graph LR
   C -->|DOM scan + collect URLs| D[Page DOM]
   C -->|normalize/lazyload fix| D
   C -->|fetch assets same origin| Net[Network]
-  C -->|GETINSPIRE_FETCH (fallback)| B[Background SW]
+  C -->|GETINSPIRE_FETCH fallback| B[Background SW]
   B -->|fetch with per-origin permission| Net
   C -->|build ZIP via JSZip| Z[Blob]
   C -->|send blobUrl + filename| B
