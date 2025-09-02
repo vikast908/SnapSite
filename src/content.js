@@ -155,10 +155,10 @@
     let mhtmlAb = null;
     try { mhtmlAb = await getMHTML(8000).catch(() => null); } catch {}
 
-    // Always use rewritten HTML as primary index to avoid blank pages on
-    // environments that cannot render MHTML from file://. Still include the
-    // MHTML as an extra artifact for users who prefer it.
-    const indexHtmlOut = bannered(htmlRewritten);
+    // Prefer MHTML launcher for YouTube playlists when available (Shadow DOM
+    // heavy and more reliable), fall back to rewritten HTML otherwise.
+    const preferMhtml = ((/(^|\.)youtube\.com$/i.test(location.hostname||'')) && /\/playlist|\/feed\/playlists/i.test(location.pathname||''));
+    const indexHtmlOut = (preferMhtml && mhtmlAb) ? mhtmlLauncherHtml() : bannered(htmlRewritten);
 
     // Build ZIP with two-pass to embed accurate report size
     sendStatus('Packing ZIP...');
@@ -1102,18 +1102,19 @@
         Promise.allSettled(pending.map(im => im.decode ? im.decode().catch(()=>{}) : new Promise(r=>{ im.addEventListener('load',r,{once:true}); im.addEventListener('error',r,{once:true}); setTimeout(r,1500);}))),
         new Promise(r => setTimeout(r, 2500))
       ]);
-      // Loosen carousels so slides aren't cropped
-      const carSel = '[class*="carousel"], [class*="slider"], [class*="slick"], [class*="swiper"], [data-carousel], [role="region"]';
+      // Loosen obvious carousels so slides aren't cropped, but avoid global
+      // transform resets which can badly distort iconography (e.g., YouTube).
+      const isYouTubeDomain = /(^|\.)youtube\.com$/i.test(location.hostname||'');
+      const carSel = '[class*="carousel"], [class*="slider"], [class*="slick"], [class*="swiper"], [data-carousel]';
       document.querySelectorAll(carSel).forEach(c => {
         try {
           const cs = getComputedStyle(c);
           if (cs.overflowX === 'hidden' || /hidden|clip/.test(cs.overflow)) c.style.overflow = 'visible';
-          if (cs.transform && cs.transform !== 'none') c.style.transform = 'none';
+          // Only neutralize transforms on typical carousel wrappers; skip on YouTube
+          if (!isYouTubeDomain && cs.transform && cs.transform !== 'none') c.style.transform = 'none';
         } catch {}
       });
-      document.querySelectorAll('[style*="transform"], [class*="slide"], [class*="track"]').forEach(el => {
-        try { const cs = getComputedStyle(el); if (cs.transform && cs.transform !== 'none') el.style.transform = 'none'; } catch {}
-      });
+      // Global transform stripping removed (caused giant icons on some sites).
     } catch (e) { console.error(e); }
   }
 
