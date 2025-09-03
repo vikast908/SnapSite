@@ -153,10 +153,12 @@ chrome.runtime.onMessage.addListener((msg) => {
     setProgress(msg.total || 1, msg.total || 1);
   }
   if (msg.type === 'GETINSPIRE_ERROR') {
+    // In crawl mode, show error but stay in crawl state.
     setStatus('Error: ' + (msg.error || 'Unknown error'));
-    if (captureMode === 'crawl') setModeUI('single');
-    stopBtn.disabled = true;
-    resetProgress();
+    if (captureMode !== 'crawl') {
+      stopBtn.disabled = true;
+      resetProgress();
+    }
   }
   // Crawl progress updates
   if (msg.type === 'GETINSPIRE_CRAWL_PROGRESS') {

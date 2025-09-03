@@ -6,6 +6,7 @@
   const pages = [];
   let startedAt = Date.now();
   let siteTitle = '';
+  let heartbeatId = null;
 
   function ensureZip(){ if (!zip) zip = new (window.JSZip||function(){ throw new Error('JSZip missing'); })(); }
   function escHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
@@ -17,6 +18,10 @@
       startedAt = Date.now();
       siteTitle = String(msg?.title || 'GetInspire Site Snapshot');
       try { chrome.runtime.sendMessage({ type:'GETINSPIRE_CRAWL_PROGRESS', done: 0, total: 0, status:'Aggregator ready' }); } catch {}
+      try {
+        if (heartbeatId) clearInterval(heartbeatId);
+        heartbeatId = setInterval(() => { try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_HEARTBEAT' }); } catch {} }, 2000);
+      } catch {}
     }
     if (msg?.type === 'GETINSPIRE_AGG_ADD_PAGE'){
       try {
@@ -66,6 +71,7 @@
         const filename = msg.filename || `getinspire-site-${new Date().toISOString().replace(/[:.]/g,'-')}.zip`;
         chrome.runtime.sendMessage({ type:'GETINSPIRE_DOWNLOAD_ZIP', blobUrl, filename });
         setTimeout(()=>{ try { URLRef.revokeObjectURL(blobUrl); } catch{} }, 45000);
+        try { if (heartbeatId) { clearInterval(heartbeatId); heartbeatId = null; } } catch {}
       } catch (e) { console.error(e); }
     }
   });

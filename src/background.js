@@ -20,6 +20,15 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
     try { sendCrawlProgress(); } catch (e) { console.error(e); }
     return;
   }
+  if (msg?.type === 'GETINSPIRE_CRAWL_HEARTBEAT') {
+    try {
+      if (__crawlSession?.running) {
+        if (!__crawlSession.active) { setTimeout(() => { try { crawlPump(); } catch (e) { console.error(e); } }, 0); }
+        sendCrawlProgress();
+      }
+    } catch (e) { console.error(e); }
+    return;
+  }
   // Content script snapshot result (crawl aggregate mode)
   if (msg?.type === 'GETINSPIRE_SNAPSHOT_RESULT') {
     try {
