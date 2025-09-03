@@ -86,6 +86,7 @@
       }
       .gi button:hover{ box-shadow: 0 2px 10px rgba(2,6,23,.15), inset 0 1px 0 rgba(255,255,255,.25); }
       .gi button:active{ transform: translateY(1px); }
+      .gi button.selected{ border-color: var(--gi-accent); box-shadow: 0 0 0 2px rgba(59,130,246,.35); }
       .gi #startBtn{
         background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.25));
         border-color: rgba(99,102,241,0.45);
@@ -139,7 +140,8 @@
     </div>
     <!-- Inline settings panel removed; gear icon opens a separate popup window -->
     <div class="gi-row">
-      <button id="startBtn">Capture this page</button>
+      <button id="startBtn" class="selected" aria-pressed="true">This page</button>
+      <button id="allBtn" aria-pressed="false">All the pages</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
     <div class="status" id="status">ready to start?</div>

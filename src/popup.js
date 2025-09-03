@@ -1,6 +1,7 @@
 const statusEl = document.getElementById('status');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const allBtn = document.getElementById('allBtn');
 const barEl = document.getElementById('bar');
 const pctEl = document.getElementById('pct');
 const countMetaEl = document.getElementById('countMeta');
@@ -9,6 +10,7 @@ const openOptionsLink = document.getElementById('openOptionsLink');
 const reportLink = document.getElementById('reportLink');
 
 let currentTabId = null;
+let captureMode = 'single'; // 'single' | 'crawl'
 let startedAt = 0;
 let lastTotal = 0;
 let lastDone = 0;
@@ -21,11 +23,29 @@ async function getActiveTabId() {
 }
 
 function setStatus(s) { if (statusEl) statusEl.textContent = s; }
+function setSelected(btn, on){ try { if (!btn) return; btn.classList.toggle('selected', !!on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); } catch {} }
+function setModeUI(mode){
+  captureMode = mode;
+  if (mode === 'crawl'){
+    setSelected(startBtn, false); setSelected(allBtn, true);
+    try { startBtn.disabled = true; } catch {}
+    try { allBtn.disabled = false; } catch {}
+    try { stopBtn.disabled = false; } catch {}
+    try { allBtn.focus(); } catch {}
+  } else {
+    setSelected(startBtn, true); setSelected(allBtn, false);
+    try { startBtn.disabled = false; } catch {}
+    try { allBtn.disabled = false; } catch {}
+    try { stopBtn.disabled = true; } catch {}
+  }
+}
 function fmtTime(ms){
   const sec = Math.max(0, Math.floor(ms/1000));
   if (sec < 60) return `${sec}s`;
   const m = Math.floor(sec/60), s = sec%60;
-  return `${m}:${String(s).padStart(2,'0')}`;
+  if (m < 60) return `${m}:${String(s).padStart(2,'0')}`;
+  const h = Math.floor(m/60), m2 = m%60;
+  return `${h}h ${String(m2).padStart(2,'0')}m`;
 }
 function setProgress(done, total) {
   total = Math.max(1, Number(total) || 1);
@@ -44,6 +64,7 @@ function setProgress(done, total) {
 function resetProgress() { setProgress(0, 1); }
 
 async function runCapture() {
+  setModeUI('single');
   currentTabId = await getActiveTabId();
   if (!currentTabId) {
     setStatus('No active tab.');
@@ -91,33 +112,81 @@ async function runCapture() {
 
 startBtn.addEventListener('click', runCapture);
 
+async function runCrawl() {
+  setModeUI('crawl');
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) { setStatus('No active tab.'); return; }
+    startedAt = Date.now(); lastDone = 0; lastTotal = 0; resetProgress();
+    setStatus('Crawl: starting...');
+    chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_START', startTabId: tab.id, startUrl: tab.url });
+  } catch (e) {
+    setStatus('Crawl start error: ' + String(e));
+  }
+}
+if (allBtn) allBtn.addEventListener('click', () => { if (captureMode === 'crawl') return; runCrawl(); });
+
 stopBtn.addEventListener('click', async () => {
   currentTabId = await getActiveTabId();
   if (!currentTabId) return;
 
   stopBtn.disabled = true;
-  setStatus('Stopping...');
-  try {
-    await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
-  } catch (e) {
-    setStatus('Error sending stop message: ' + String(e));
+  if (captureMode === 'crawl') {
+    setStatus('Stopping crawl...');
+    try { await chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_STOP' }); } catch {}
+  } else {
+    setStatus('Stopping...');
+    try {
+      await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
+    } catch (e) {
+      setStatus('Error sending stop message: ' + String(e));
+    }
   }
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'GETINSPIRE_STATUS') setStatus(msg.text);
-  if (msg.type === 'GETINSPIRE_PROGRESS') setProgress(msg.downloaded, msg.total);
-  if (msg.type === 'GETINSPIRE_DONE') {
+  if (msg.type === 'GETINSPIRE_STATUS' && captureMode === 'single') setStatus(msg.text);
+  if (msg.type === 'GETINSPIRE_PROGRESS' && captureMode === 'single') setProgress(msg.downloaded, msg.total);
+  if (msg.type === 'GETINSPIRE_DONE' && captureMode === 'single') {
     setStatus('Downloaded ZIP.');
     stopBtn.disabled = true;
     setProgress(msg.total || 1, msg.total || 1);
   }
   if (msg.type === 'GETINSPIRE_ERROR') {
     setStatus('Error: ' + (msg.error || 'Unknown error'));
+    if (captureMode === 'crawl') setModeUI('single');
     stopBtn.disabled = true;
     resetProgress();
   }
+  // Crawl progress updates
+  if (msg.type === 'GETINSPIRE_CRAWL_PROGRESS') {
+    if (msg.running && captureMode !== 'crawl') setModeUI('crawl');
+    if (captureMode !== 'crawl') return;
+    if (msg.running === false) return; // ignore stale updates
+    const done = Number(msg.done || 0);
+    const total = Math.max(done, Number(msg.total || 0));
+    const elapsed = startedAt ? Date.now() - startedAt : 0;
+    const etaMs = done > 0 ? Math.max(0, Math.round((elapsed/done) * (total - done))) : 0;
+    const etaTxt = done > 0 ? `, ETA ${fmtTime(etaMs)}` : '';
+    setStatus((msg.status || 'Crawling...') + ` ${done}/${total}${etaTxt}`);
+    setProgress(done, total);
+    try {
+      if (countMetaEl) countMetaEl.textContent = `${done}/${total}`;
+      if (elapsedMetaEl) elapsedMetaEl.textContent = fmtTime(elapsed) + (etaTxt?(' • ' + etaTxt):'');
+    } catch {}
+  }
+  if (msg.type === 'GETINSPIRE_CRAWL_DONE' && captureMode === 'crawl') {
+    setStatus(`Crawl done: ${msg.done || 0} pages`);
+    stopBtn.disabled = true;
+    setModeUI('single');
+    setProgress(msg.done || 1, msg.done || 1);
+  }
 });
+
+// When popup opens, ask background if a crawl is running and sync UI
+try {
+  chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_POLL' });
+} catch {}
 
 // Quick actions
 if (openOptionsLink) openOptionsLink.addEventListener('click', async (e) => {

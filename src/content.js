@@ -72,6 +72,12 @@
       await normalizePageForSnapshot({ includeVideo: !options.skipVideo });
     } catch (e) { console.error(e); }
 
+    // Snapshot canvas-heavy UIs (e.g., Google Sheets/Slides) to static images
+    try {
+      sendStatus('Rasterizing canvases...');
+      await replaceCanvasesWithSnapshots({ maxCount: 80, maxPixels: 35 * 1024 * 1024 });
+    } catch (e) { console.error(e); }
+
     // For highly dynamic apps (e.g., YouTube), wait for real content to
     // replace skeletons before snapshotting. This avoids saving a page of
     // placeholders.
@@ -109,7 +115,9 @@
     // Download assets with concurrency and caps
     const totalAssets = collected.urls.size;
     sendStatus(`Downloading ${totalAssets} assets...`);
-    try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: 0, total: totalAssets }); } catch (e) { console.error(e); }
+    if (typeof window === 'undefined' || window.__GETINSPIRE_MODE !== 'crawl') {
+      try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: 0, total: totalAssets }); } catch (e) { console.error(e); }
+    }
     try { if (overlay) overlay.setProgress(0, totalAssets); } catch {}
     const dres = await downloadAllAssets(collected.urls, {
       concurrency: options.concurrency,
@@ -118,7 +126,12 @@
       started: state.started,
       maxMillis: options.maxMillis,
       requestTimeoutMs: defaults.requestTimeoutMs,
-      onProgress: (done, total) => { try { if (overlay) overlay.setProgress(done, total); } catch {} }
+      onProgress: (done, total) => {
+        try { if (overlay) overlay.setProgress(done, total); } catch {}
+        if (typeof window === 'undefined' || window.__GETINSPIRE_MODE !== 'crawl') {
+          try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: done, total }); } catch (e) { console.error(e); }
+        }
+      }
     });
     if (dres.stopReason) {
       const reason = dres.stopReason;
@@ -188,6 +201,35 @@
     // artifact under report/page.mhtml.
     const indexHtmlOut = bannered(htmlRewritten);
 
+    // In crawl mode, send a page package to aggregator instead of downloading per-page ZIP
+    if (typeof window !== 'undefined' && window.__GETINSPIRE_MODE === 'crawl') {
+      try {
+        sendStatus('Packaging page for site ZIP...');
+        const assets = [];
+        for (const [url, info] of dres.map) {
+          try { assets.push({ path: info.path, mime: info.mime, arrayBuffer: await info.blob.arrayBuffer() }); } catch {}
+        }
+        const extras = [
+          { path: 'report/asset-manifest.json', type: 'text', data: JSON.stringify(manifest, null, 2) },
+          ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'arrayBuffer', data: mhtmlAb }] : [])
+        ];
+        const pkg = {
+          pageUrl: location.href,
+          title: document.title || location.href,
+          indexHtml: indexHtmlOut,
+          assets,
+          reportJson: JSON.stringify(state.report, null, 2),
+          readmeMd: buildReadme(state.report),
+          quickCheckHtml: quickCheckHtml(state.report),
+          extras
+        };
+        try { await chrome.runtime.sendMessage({ type: 'GETINSPIRE_SNAPSHOT_RESULT', package: pkg }); } catch {}
+      } catch (e) { console.error(e); }
+      sendStatus('Page packaged.');
+      cleanup();
+      return;
+    }
+
     // Build ZIP with two-pass to embed accurate report size
     sendStatus('Packing ZIP...');
     const { blob: blob1 } = await buildZip({
@@ -228,7 +270,9 @@
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_DOWNLOAD_ZIP', blobUrl, filename });
     // Revoke in the creating context as a fallback/safety
     try { setTimeout(() => { try { URLRef.revokeObjectURL(blobUrl); } catch {} }, 30000); } catch {}
-      try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: totalAssets, total: totalAssets }); } catch (e) { console.error(e); }
+      if (typeof window === 'undefined' || window.__GETINSPIRE_MODE !== 'crawl') {
+        try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: totalAssets, total: totalAssets }); } catch (e) { console.error(e); }
+      }
     sendStatus('Done.');
     cleanup();
   })().catch(e => fail(e?.message || String(e)));
@@ -286,7 +330,7 @@
             skipVideo: o.skipVideo ?? defaults.skipVideo,
             stripScripts: o.stripScripts ?? defaults.stripScripts,
             fontFallback: o.fontFallback ?? defaults.fontFallback,
-            showOverlay: o.showOverlay ?? defaults.showOverlay,
+            showOverlay: (typeof window !== 'undefined' && window.__GETINSPIRE_SUPPRESS_OVERLAY) ? false : (o.showOverlay ?? defaults.showOverlay),
             replaceIframesWithPoster: o.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster,
             // Respect an explicitly empty denylist. Previously, clearing the
             // denylist in the options page would fall back to the built-in
@@ -485,8 +529,11 @@
       try {
         if (!u) return;
         if (u.startsWith('data:')) { skipped.push({ url: u.slice(0, 64) + (u.length > 64 ? '...' : ''), reason: 'data-uri' }); return; }
-        const abs = new URL(u, document.baseURI).href;
-        urls.add(abs);
+        const uo = new URL(u, document.baseURI);
+        // Deduplicate sprite sheets referenced with fragments (#icon)
+        // by dropping the fragment from the download key.
+        const absNoHash = (() => { try { const t = new URL(uo.href); t.hash = ''; return t.href; } catch { return uo.href; } })();
+        urls.add(absNoHash);
         } catch (e) { console.error(e); }
     };
 
@@ -857,7 +904,8 @@
     html = html.replace(/\b(src|href|poster)=(["'])([^"']+)(\2)/gi, (m, a, q, u) => {
       try {
         const abs = new URL(u, base).href;
-        const entry = map.get(abs);
+        const absNoHash = (() => { try { const t = new URL(abs); t.hash = ''; return t.href; } catch { return abs; } })();
+        const entry = map.get(abs) || map.get(absNoHash);
         if (!entry) return m;
         const hash = u.includes('#') ? u.slice(u.indexOf('#')) : '';
         return `${a}=${q}${entry.path}${hash}${q}`;
@@ -870,7 +918,8 @@
         const [u, d] = part.trim().split(/\s+/);
         try {
           const abs = new URL(u, base).href;
-          const entry = map.get(abs);
+          const absNoHash = (() => { try { const t = new URL(abs); t.hash = ''; return t.href; } catch { return abs; } })();
+          const entry = map.get(abs) || map.get(absNoHash);
           return (entry ? entry.path : u) + (d ? (' ' + d) : '');
         } catch { return part; }
       });
@@ -884,8 +933,10 @@
         if (raw.startsWith('data:')) return mm;
         try {
           const abs = new URL(raw, base).href;
-          const entry = map.get(abs);
-          return entry ? `url(${entry.path})` : mm;
+          const absNoHash = (() => { try { const t = new URL(abs); t.hash = ''; return t.href; } catch { return abs; } })();
+          const entry = map.get(abs) || map.get(absNoHash);
+          const hash = raw.includes('#') ? raw.slice(raw.indexOf('#')) : '';
+          return entry ? `url(${entry.path}${hash})` : mm;
         } catch { return mm; }
       });
       return `style=${q}${rewritten}${q}`;
@@ -916,8 +967,10 @@
           if (raw.startsWith('data:')) return mm;
           try {
             const abs = new URL(raw, base).href;
-            const entry = map.get(abs);
-            return entry ? `url(${entry.path})` : mm;
+            const absNoHash = (() => { try { const t = new URL(abs); t.hash = ''; return t.href; } catch { return abs; } })();
+            const entry = map.get(abs) || map.get(absNoHash);
+            const hash = raw.includes('#') ? raw.slice(raw.indexOf('#')) : '';
+            return entry ? `url(${entry.path}${hash})` : mm;
           } catch { return mm; }
         })
         .replace(/@import\s+(?:url\()?\s*['"]?([^'"\)]+)['"]?\s*\)?/g, (mm, u) => {
@@ -942,7 +995,9 @@
     // Rewrite external SVG sprite references in <use>
     html = html.replace(/<use\b([^>]*?(?:xlink:href|href)=(["'])([^"']+)\2[^>]*)>/gi, (m, attrs, q, val) => {
       try {
-        const abs = new URL(val, base).href; const entry = map.get(abs); if (!entry) return m;
+        const abs = new URL(val, base).href;
+        const absNoHash = (() => { try { const t = new URL(abs); t.hash = ''; return t.href; } catch { return abs; } })();
+        const entry = map.get(abs) || map.get(absNoHash); if (!entry) return m;
         const hash = val.includes('#') ? val.slice(val.indexOf('#')) : '';
         return `<use ${attrs.replace(/(?:xlink:href|href)=(["'])([^"']+)\1/i, `href="${entry.path}${hash}"`)}>`;
       } catch { return m; }
@@ -980,8 +1035,10 @@
             if (raw.startsWith('data:')) return m2;
             try {
               const abs = new URL(raw, origUrl).href;
-              const entry = map.get(abs);
-              return entry ? `url(${entry.path})` : m2;
+              const absNoHash = (() => { try { const t = new URL(abs); t.hash = ''; return t.href; } catch { return abs; } })();
+              const entry = map.get(abs) || map.get(absNoHash);
+              const hash = raw.includes('#') ? raw.slice(raw.indexOf('#')) : '';
+              return entry ? `url(${entry.path}${hash})` : m2;
             } catch { return m2; }
           })
           .replace(/@import\s+(?:url\()?\s*['"]?([^'"\)]+)['"]?\s*\)?/g, (m2, u) => {
@@ -1194,6 +1251,41 @@
         } catch {}
       });
       // Global transform stripping removed (caused giant icons on some sites).
+    } catch (e) { console.error(e); }
+  }
+
+  // Replace <canvas> elements with <img src="data:..."> snapshots so pages that
+  // render content via Canvas/WebGL still show up offline when scripts are stripped.
+  async function replaceCanvasesWithSnapshots({ maxCount = 80, maxPixels = 35_000_000 } = {}) {
+    try {
+      const canvases = Array.from(document.querySelectorAll('canvas'));
+      let done = 0;
+      for (const cv of canvases) {
+        if (done >= maxCount) break;
+        try {
+          // Skip tiny or zero-size canvases
+          const w = Math.floor(Number(cv.width) || cv.clientWidth || 0);
+          const h = Math.floor(Number(cv.height) || cv.clientHeight || 0);
+          if (!w || !h || (w * h) > maxPixels) continue;
+          // Some canvases can be tainted by cross-origin draws; toDataURL will throw.
+          let dataUrl = '';
+          try { dataUrl = cv.toDataURL('image/png'); } catch { dataUrl = ''; }
+          if (!dataUrl || !/^data:image\//i.test(dataUrl)) continue;
+          const img = document.createElement('img');
+          img.src = dataUrl;
+          // Preserve display size
+          try {
+            const cs = getComputedStyle(cv);
+            if (cs.width && cs.height) { img.style.width = cs.width; img.style.height = cs.height; }
+          } catch {}
+          img.alt = cv.getAttribute('aria-label') || 'Canvas snapshot';
+          // Carry classes/inline styles that affect sizing/positioning
+          try { if (cv.className) img.className = cv.className; } catch {}
+          try { const st = cv.getAttribute('style'); if (st) img.setAttribute('style', st); } catch {}
+          cv.parentNode && cv.parentNode.replaceChild(img, cv);
+          done++;
+        } catch {}
+      }
     } catch (e) { console.error(e); }
   }
 
