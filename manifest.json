@@ -4,16 +4,14 @@
   "version": "0.1.1",
   "description": "Snapshot any finite web page into a local ZIP (index.html + assets). Detects endless pages and stops.",
   "action": { "default_popup": "src/popup.html", "default_title": "GetInspire" },
-  "permissions": ["activeTab", "tabs", "scripting", "downloads", "storage", "contextMenus", "pageCapture", "declarativeNetRequest", "nativeMessaging"],
+  "permissions": ["activeTab", "tabs", "scripting", "downloads", "storage", "contextMenus", "pageCapture"],
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "src/background.js", "type": "module" },
   "options_page": "src/options.html",
   "web_accessible_resources": [
     {
       "resources": [
-        "src/defaults.js",
-        "native/ytdlp_host.js",
-        "native/run_ytdlp_host.cmd"
+        "src/defaults.js"
       ],
       "matches": ["<all_urls>"]
     }

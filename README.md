@@ -55,7 +55,7 @@ New: Video Downloader
 
 Popup UI Updates
 
-- Top right actions: [Download video] [Settings] [Report issue].
+- Top right actions: [Settings] [Report issue].
 - Progress line shows percentage, counts, and elapsed time during captures and HLS downloads.
 - Settings opens in a small popup window (not a browser tab) with all options from `src/options.html`.
 

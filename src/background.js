@@ -117,50 +117,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
   }
 });
 
-// ---- Video downloader: info + download ----
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.type === 'GETINSPIRE_VIDEO_INFO') {
-    (async () => {
-      try {
-        const info = await analyzeVideoUrl(msg.url, sender);
-        sendResponse({ ok: true, info });
-      } catch (e) {
-        sendResponse({ ok: false, error: String(e) });
-      }
-    })();
-    return true; // async
-  }
-  if (msg?.type === 'GETINSPIRE_VIDEO_DOWNLOAD') {
-    (async () => {
-      try {
-        await downloadVideoVariant(msg.variant, sender);
-        sendResponse({ ok: true });
-      } catch (e) {
-        try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_ERROR', error: String(e) }); } catch {}
-        sendResponse({ ok: false, error: String(e) });
-      }
-    })();
-    return true;
-  }
-  if (msg?.type === 'GETINSPIRE_YTDLP_PROBE') {
-    (async () => {
-      try {
-        const info = await ytdlpProbe(msg.url);
-        sendResponse(info);
-      } catch (e) { sendResponse({ ok: false, error: String(e) }); }
-    })();
-    return true;
-  }
-  if (msg?.type === 'GETINSPIRE_YTDLP_DOWNLOAD') {
-    (async () => {
-      try {
-        await ytdlpDownload(msg.url, msg.format || 'bestvideo*+bestaudio/best');
-        sendResponse({ ok: true });
-      } catch (e) { try { chrome.runtime.sendMessage({ type:'GETINSPIRE_ERROR', error:String(e) }); } catch {}; sendResponse({ ok: false, error: String(e) }); }
-    })();
-    return true;
-  }
-});
+// (Video downloader removed)
 
 async function analyzeVideoUrl(urlStr, sender){
   const out = { variants: [] };
@@ -470,12 +427,7 @@ async function ytdlpDownload(url, format){
   });
 }
 
-function openSetupTab(){
-  try {
-    const url = chrome.runtime.getURL('src/setup.html');
-    chrome.tabs.create({ url });
-  } catch {}
-}
+// openSetupTab removed (setup page deleted)
 
 // Context menu: Capture this page
 chrome.runtime.onInstalled.addListener(() => {
