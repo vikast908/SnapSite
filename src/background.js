@@ -119,43 +119,9 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
 
 // (Video downloader removed)
 
-async function analyzeVideoUrl(urlStr, sender){
-  const out = { variants: [] };
-  const same = (() => { try { return new URL(urlStr).origin === (sender?.origin || sender?.url && new URL(sender.url).origin); } catch { return false; } })();
-  const okPerm = await ensureHostPermissionFor(urlStr, same);
-  if (!okPerm) throw new Error('Permission denied for video host');
-  const res = await fetch(urlStr, { method: 'GET', credentials: 'include', mode: 'cors' }).catch(()=>null);
-  if (!res) throw new Error('Fetch failed');
-  const ct = (res.headers.get('content-type') || '').toLowerCase();
-  const textPeek = (!ct || /m3u8|mpegurl/i.test(ct) || /text|application\/octet-stream/i.test(ct)) ? await res.clone().text().catch(()=> '') : '';
-  // HLS master or media playlist
-  if (/m3u8|mpegurl/i.test(ct) || /^#extm3u/i.test(textPeek.trim())){
-    const base = res.url || urlStr;
-    const body = textPeek || await res.text();
-    const master = parseM3U8Master(body, base);
-    if (master.variants.length) {
-      out.variants = master.variants.map(v => ({
-        type: 'hls-variant', url: v.url, bandwidth: v.bandwidth || 0, resolution: v.resolution || '', label: labelForVariant(v)
-      }));
-    } else {
-      // Single playlist (no variants)
-      out.variants = [{ type: 'hls-playlist', url: base, label: 'Auto' }];
-    }
-    return out;
-  }
-  // Direct MP4/WEBM etc.
-  if (/video\//.test(ct) || /octet-stream/.test(ct) || /mp4|webm|ogg/i.test(urlStr)){
-    out.variants = [{ type: 'file', url: res.url || urlStr, label: 'Source' }];
-    return out;
-  }
-  throw new Error('No downloadable stream detected (may be DRM/MSE)');
-}
 
-function labelForVariant(v){
-  const r = v.resolution || '';
-  const bw = v.bandwidth ? Math.round(v.bandwidth/1000)+'kbps' : '';
-  return [r, bw].filter(Boolean).join(' ');
-}
+
+
 
 function parseAttrs(line){
   const obj = {}; const s = line.replace(/^.*?:/,'');
