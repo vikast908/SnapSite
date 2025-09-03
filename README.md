@@ -48,10 +48,9 @@ New: Video Downloader
 
 - Click the download icon in the popup header to detect the currently playing/visible video on the page.
 - A quality menu appears. Click a quality to start the download in the background.
-- Supported: direct files (MP4/WebM/Ogg) and non‑encrypted HLS (.m3u8) streams. Progress shows in the popup bar for HLS.
-- Permissions: for some hosts, Chrome prompts for per‑origin access the first time. Accept the prompt to proceed.
-- Not supported: DRM/Widevine, encrypted HLS (SAMPLE‑AES/AES‑128), and ciphered/MSE‑only streams many sites use (including many YouTube/course videos). These won’t expose downloadable URLs in‑page.
-- Tip: If you routinely need protected streams, consider the optional native helper approach described below.
+- Supported: direct files (MP4/WebM/Ogg) and non-encrypted HLS (.m3u8) streams. Progress shows in the popup bar for HLS.
+- Permissions: for some hosts, Chrome prompts for per-origin access the first time. Accept the prompt to proceed.
+- Not supported: DRM/Widevine, encrypted HLS (SAMPLE-AES/AES-128), and ciphered/MSE-only streams many sites use (including many YouTube/course videos). These won't expose downloadable URLs in-page.
 
 Popup UI Updates
 
@@ -63,7 +62,7 @@ Options Enhancements
 
 - Added toggles: "Show overlay" and "Font fallback" alongside existing settings.
 - Denylist presets: quick buttons to insert common social/search patterns (then click Save).
-- "Save without prompt": if enabled, ZIP and video downloads won’t ask for a filename.
+- "Save without prompt": if enabled, ZIP and video downloads won't ask for a filename.
 
 Icons & Branding
 
@@ -80,41 +79,12 @@ Icons & Branding
 Troubleshooting Video Downloads
 
 - Permission denied for video host: click the quality again and accept Chrome’s permission prompt. The prompt must be accepted under your click.
-- No downloadable video found on YouTube: many videos are protected via MSE/DRM; the extension cannot extract those in‑page.
-- Encrypted HLS message: the stream uses encryption (e.g., SAMPLE‑AES). Decryption is out of scope for the in‑extension downloader.
+- No downloadable video found on YouTube: many videos are protected via MSE/DRM; the extension cannot extract those in-page.
+- Encrypted HLS message: the stream uses encryption (e.g., SAMPLE-AES). Decryption is out of scope for the in-extension downloader.
 
 Roadmap (Optional)
 
-- Native helper integration (yt‑dlp via Native Messaging) to support YouTube/courses reliably, still triggering downloads from the extension UI.
 - DASH (MPD) parsing support for broader site coverage.
-
-Native Helper (yt‑dlp) — Installation
-
-For robust YouTube/course downloads, install the optional native helper that bridges the extension to `yt-dlp`.
-
-Prereqs
-- Install Node.js (v16+). https://nodejs.org/
-- Install `yt-dlp` and put it in PATH. https://github.com/yt-dlp/yt-dlp/releases
-
-Windows install
-1. Find your extension ID: open `chrome://extensions`, enable Developer mode, copy the 32‑char ID for GetInspire.
-2. Open PowerShell, cd into the repo folder.
-3. Run: `powershell -ExecutionPolicy Bypass -File native/install-windows.ps1 -ExtensionId <your_id>`
-   - Optional for Edge, add `-AlsoEdge`.
-4. Ensure `yt-dlp` is in PATH (`yt-dlp -h` works) and `node` is installed.
-5. Reload the extension at `chrome://extensions`.
-
-Usage
-- Click the download icon in the popup. You’ll see a “yt-dlp (best)” option.
-- Picking this will hand the page URL to `yt-dlp`; progress appears in the popup.
-
-If you see “yt-dlp host disconnected”
-- Extension ID not registered: re-run the installer with `-ExtensionId <your_id>`.
-- Node or yt-dlp missing from PATH: install them and retry.
-- Verify host registration: check `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.getinspire.ytdlp` and that it points to `native\com.getinspire.ytdlp.json`.
-
-Uninstall helper
-- Remove registry key `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.getinspire.ytdlp` and delete the `native/` folder.
 
 Architecture Overview
 
@@ -214,3 +184,4 @@ Developer Notes
 - Testing tips:
   - Use the Quick Check page in the ZIP for a fast sanity pass.
   - Inspect `report/README.md` and `report/asset-manifest.json` for coverage and failures.
+
