@@ -8,6 +8,7 @@ const countMetaEl = document.getElementById('countMeta');
 const elapsedMetaEl = document.getElementById('elapsedMeta');
 const openOptionsLink = document.getElementById('openOptionsLink');
 const reportLink = document.getElementById('reportLink');
+const themeToggle = document.getElementById('themeToggle');
 
 let currentTabId = null;
 let captureMode = 'single'; // 'single' | 'crawl'
@@ -189,6 +190,25 @@ chrome.runtime.onMessage.addListener((msg) => {
 try {
   chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_POLL' });
 } catch {}
+
+// Theme toggle
+function renderTheme(mode){
+  if (!themeToggle) return;
+  const title = 'Theme: ' + (mode === 'auto' ? 'Auto' : (mode === 'dark' ? 'Dark' : 'Light'));
+  themeToggle.title = title;
+  themeToggle.setAttribute('aria-label', 'Toggle theme (' + title + ')');
+  const sun = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12h2M18 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>';
+  const moon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  const auto = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M2 12h8M12 2v8"/></svg>';
+  themeToggle.innerHTML = (mode === 'dark') ? moon : (mode === 'light' ? sun : auto);
+}
+if (themeToggle && window.getInspireTheme) {
+  try { window.getInspireTheme.get(renderTheme); } catch {}
+  themeToggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    try { window.getInspireTheme.cycle(renderTheme); } catch {}
+  });
+}
 
 // Quick actions
 if (openOptionsLink) openOptionsLink.addEventListener('click', async (e) => {

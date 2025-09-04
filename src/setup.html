@@ -11,6 +11,12 @@
       button{ padding:8px 12px; border-radius:8px; cursor:pointer; }
       .ok{ color: #16a34a; }
       .warn{ color: #d97706; }
+      @media (prefers-color-scheme: dark){
+        body { background:#0b1220; color:#e5e7eb; }
+        button { background:#111827; color:#e5e7eb; border:1px solid #374151; }
+      }
+      html[data-theme="dark"] body { background:#0b1220; color:#e5e7eb; }
+      html[data-theme="dark"] button { background:#111827; color:#e5e7eb; border:1px solid #374151; }
     </style>
   </head>
   <body>
@@ -38,7 +44,7 @@
       </details>
     </div>
 
+    <script src="theme.js"></script>
     <script type="module" src="setup.js"></script>
   </body>
   </html>
-

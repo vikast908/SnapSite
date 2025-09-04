@@ -3,106 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <title>GetInspire</title>
+    <link rel="stylesheet" href="ui.css" />
     <style>
-      /* Scope everything under .gi to prevent host-page CSS collisions */
-      .gi{
-        /* Design tokens */
-        --gi-bg: rgba(255,255,255,0.55);
-        --gi-stroke: rgba(255,255,255,0.35);
-        --gi-text: #0f172a;
-        --gi-subtle: #334155;
-        --gi-accent: #3b82f6;
-        --gi-shadow: 0 8px 26px rgba(2,6,23,0.18);
-      }
-      @media (prefers-color-scheme: dark){
-        .gi{
-          --gi-bg: rgba(15,23,42,0.45);
-          --gi-stroke: rgba(255,255,255,0.12);
-          --gi-text: #e5e7eb;
-          --gi-subtle: #94a3b8;
-          --gi-accent: #60a5fa;
-          --gi-shadow: 0 8px 30px rgba(0,0,0,0.45);
-        }
-      }
-
-      /* Layout container — keep a sensible popup width */
+      /* Popup sizing and layout that complement shared styles */
       body.gi{
-        font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-        margin: 0; padding: 12px;
-        color: var(--gi-text);
-        /* Restore stable popup sizing so rows don’t collapse */
-        min-width: 320px; /* Chrome popups follow document min-width */
-        max-width: 360px;
-        background: var(--gi-bg);
-        backdrop-filter: blur(14px) saturate(140%);
-        -webkit-backdrop-filter: blur(14px) saturate(140%);
-        border-radius: 16px;
-        border: 1px solid var(--gi-stroke);
-        box-shadow: var(--gi-shadow);
-        overflow: hidden;
+        margin: 0; padding: 12px; min-width: 320px; max-width: 380px;
       }
-
-      /* Keep sizing stable inside the component */
       .gi, .gi * { box-sizing: border-box; }
-
       .gi h3{ margin: 0; font-weight: 700; letter-spacing:.2px; }
-
-      /* Top bar with actions on the right */
       .gi .gi-top{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
       .gi .gi-top .title{ flex:1; display:flex; align-items:center; gap:8px; }
-      .gi .brand .logo{ width:22px; height:22px; color: var(--gi-text); display:block; }
+      .gi .brand .logo{ width:22px; height:22px; color: currentColor; display:block; }
       .gi .brand span{ font-weight:700; letter-spacing:.2px; }
-      .gi .icon-btn{
-        display:inline-flex; align-items:center; justify-content:center;
-        width:28px; height:28px; border:1px solid var(--gi-stroke); border-radius:8px;
-        background: rgba(255,255,255,0.35); color: inherit; text-decoration:none; cursor:pointer;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); transition: box-shadow .2s ease, transform .06s ease;
-      }
-      .gi .icon-btn:hover{ box-shadow: 0 2px 10px rgba(2,6,23,.15), inset 0 1px 0 rgba(255,255,255,.25); }
-      .gi .icon-btn:active{ transform: translateY(1px); }
-      .gi .icon-btn svg{ width:16px; height:16px; display:block; }
-
-      /* Floating panel for video quality selection */
-      .gi .panel{ position: relative; }
-      .gi .video-panel{ position:absolute; right:0; top:36px; z-index:10; display:none; min-width:220px;
-        background: rgba(255,255,255,0.9); border:1px solid var(--gi-stroke); border-radius:12px; box-shadow: var(--gi-shadow); padding:8px; backdrop-filter: blur(8px); }
-      @media (prefers-color-scheme: dark){ .gi .video-panel{ background: rgba(15,23,42,0.85); } }
-      .gi .video-panel.open{ display:block; }
-      .gi .video-list{ display:flex; flex-direction:column; gap:6px; margin-top:6px; }
-      .gi .video-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
-      .gi .video-item button{ padding:6px 10px; border-radius:8px; }
-
-      .gi .gi-row{ margin: 6px 0; display:flex; gap:10px; align-items:center; flex-wrap: nowrap; }
-
-      .gi button{
-        appearance: none; border:1px solid var(--gi-stroke); border-radius: 10px;
-        padding: 9px 14px; cursor: pointer; background: rgba(255,255,255,0.35);
-        color: var(--gi-text); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
-        transition: box-shadow .2s ease, transform .06s ease, background .2s ease;
-        backdrop-filter: blur(6px);
-      }
-      @media (prefers-color-scheme: dark){
-        .gi button{ background: rgba(17,24,39,0.35); }
-      }
-      .gi button:hover{ box-shadow: 0 2px 10px rgba(2,6,23,.15), inset 0 1px 0 rgba(255,255,255,.25); }
-      .gi button:active{ transform: translateY(1px); }
-      .gi button.selected{ border-color: var(--gi-accent); box-shadow: 0 0 0 2px rgba(59,130,246,.35); }
-      .gi #startBtn{
-        background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.25));
-        border-color: rgba(99,102,241,0.45);
-      }
-      .gi #startBtn:hover{ box-shadow: 0 6px 18px rgba(59,130,246,.25); }
-      .gi #stopBtn[disabled]{ opacity:.55; cursor:not-allowed; }
-
-      .gi .status{ margin-top: 6px; white-space: pre-wrap; min-height: 2em; font-size:12px; color: var(--gi-subtle); }
-      .gi small{ color: var(--gi-subtle); display:block; margin-top:6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-      .gi .gi-progress-row{ display:flex; align-items:center; gap:8px; }
-      .gi .gi-progress{ margin-top: 6px; height:10px; background: rgba(255,255,255,0.35); border:1px solid var(--gi-stroke); border-radius: 999px; overflow:hidden; backdrop-filter: blur(6px); flex:1; min-width:0; }
-      /* Style bar via its ID to avoid collisions with site classes */
-      .gi .gi-progress #bar{ height:100%; width:0%; background: linear-gradient(90deg, var(--gi-accent), #a78bfa); transition: width .25s ease; }
-      .gi .pct{ min-width: 32px; text-align:right; font-variant-numeric: tabular-nums; color: var(--gi-text); }
-      .gi .meta{ margin-top:4px; display:flex; align-items:center; justify-content: space-between; gap:8px; font-size:12px; color: var(--gi-subtle); }
     </style>
   </head>
   <body class="gi">
@@ -124,7 +36,12 @@
         <!-- gear icon -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09c0 .67.39 1.27 1 1.51.6.24 1.28.11 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.44.54-.57 1.22-.33 1.82.24.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.27.39-1.51 1z"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09c-.67 0-1.27.39-1.51 1z"/>
+        </svg>
+      </a>
+      <a href="#" id="themeToggle" class="icon-btn" title="Theme: Auto" aria-label="Toggle theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="5"/>
         </svg>
       </a>
       <a href="#" id="reportLink" class="icon-btn" title="Report issue" aria-label="Report issue">
@@ -138,24 +55,37 @@
         </svg>
       </a>
     </div>
-    <!-- Inline settings panel removed; gear icon opens a separate popup window -->
-    <div class="gi-row">
-      <button id="startBtn" class="selected" aria-pressed="true">This page</button>
-      <button id="allBtn" aria-pressed="false">All the pages</button>
-      <button id="stopBtn" disabled>Stop</button>
-    </div>
-    <div class="status" id="status">ready to start?</div>
-    <div class="gi-row gi-progress-row">
-      <div class="gi-progress" style="flex:1">
-        <div id="bar"></div>
+    <!-- Segmented capture mode + Stop -->
+    <div class="row" style="display:flex; align-items:center; gap:8px;">
+      <div class="segmented" role="tablist" aria-label="Capture mode">
+        <button id="startBtn" class="btn selected" aria-pressed="true" role="tab" aria-selected="true" title="Capture this page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          <span>This page</span>
+        </button>
+        <button id="allBtn" class="btn" aria-pressed="false" role="tab" aria-selected="false" title="Crawl and capture multiple pages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10"/><path d="M7 13h7"/></svg>
+          <span>All pages</span>
+        </button>
       </div>
-      <div class="pct" id="pct">0%</div>
+      <button id="stopBtn" class="btn btn-danger" disabled title="Stop">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
     </div>
-    <div class="meta" id="meta" aria-live="polite">
+    <div class="panel">
+      <div class="status" id="status">ready to start?</div>
+      <div class="row" style="display:flex; align-items:center; gap:8px;">
+        <div class="progress" style="flex:1">
+          <div id="bar" class="bar"></div>
+        </div>
+        <div class="pct" id="pct" style="min-width:32px; text-align:right; font-variant-numeric: tabular-nums;">0%</div>
+      </div>
+    </div>
+    <div class="meta" id="meta" aria-live="polite" style="margin-top:6px;">
       <span id="countMeta">0/0</span>
       <span id="elapsedMeta">0s</span>
     </div>
-    <small id="hint">Scan -> Scroll -> Collect -> Rewrite -> Zip -> Download</small>
+    <small id="hint" style="color:var(--ui-subtle); display:block; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Scan -> Scroll -> Collect -> Rewrite -> Zip -> Download</small>
+    <script src="theme.js"></script>
     <script src="popup.js"></script>
   </body>
   </html>
