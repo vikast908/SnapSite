@@ -44,10 +44,6 @@ Notes
 
 ---
 
-Roadmap (Optional)
-
-- DASH (MPD) parsing support for broader site coverage.
-
 Architecture Overview
 
 ```mermaid
