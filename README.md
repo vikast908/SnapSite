@@ -82,10 +82,6 @@ Troubleshooting Video Downloads
 - No downloadable video found on YouTube: many videos are protected via MSE/DRM; the extension cannot extract those in-page.
 - Encrypted HLS message: the stream uses encryption (e.g., SAMPLE-AES). Decryption is out of scope for the in-extension downloader.
 
-Roadmap (Optional)
-
-- DASH (MPD) parsing support for broader site coverage.
-
 Architecture Overview
 
 ```mermaid
