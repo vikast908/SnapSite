@@ -232,7 +232,9 @@
 
     // Build ZIP with two-pass to embed accurate report size
     sendStatus('Packing ZIP...');
-    const { blob: blob1 } = await buildZip({
+    let blob1;
+    try {
+      const r1 = await buildZip({
       indexHtml: indexHtmlOut,
       assets: dres.map,
       reportJson: JSON.stringify(state.report, null, 2),
@@ -243,11 +245,16 @@
         ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'blob', data: new Blob([mhtmlAb], { type: 'multipart/related' }) }] : [])
       ],
       sizeCap: options.maxZipMB * 1024 * 1024,
-    });
+      shouldStop: () => state.stopped,
+      });
+      blob1 = r1.blob;
+    } catch (e) { if (String(e).includes('stopped')) return fail('Stopped by user.'); else throw e; }
     state.report.stats.zipBytes = blob1.size;
     state.report.stats.durationMs = Date.now() - state.started;
 
-    const { blob } = await buildZip({
+    let blob;
+    try {
+      const r2 = await buildZip({
       indexHtml: indexHtmlOut,
       assets: dres.map,
       reportJson: JSON.stringify(state.report, null, 2),
@@ -258,7 +265,10 @@
         ...(mhtmlAb ? [{ path: 'report/page.mhtml', type: 'blob', data: new Blob([mhtmlAb], { type: 'multipart/related' }) }] : [])
       ],
       sizeCap: options.maxZipMB * 1024 * 1024,
-    });
+      shouldStop: () => state.stopped,
+      });
+      blob = r2.blob;
+    } catch (e) { if (String(e).includes('stopped')) return fail('Stopped by user.'); else throw e; }
 
     if (state.stopped) return fail('Stopped by user.');
 
@@ -556,6 +566,15 @@
       if (!ss) return;
       ss.split(',').forEach(part => add(part.trim().split(/\s+/)[0]));
     });
+    // Common lazy-load data-* attributes used for images and backgrounds
+    const dataAttrs = ['data-src','data-original','data-lazy','data-lazy-src','data-llsrc','data-src-large','data-src-small','data-fallback-src','data-image','data-thumb','data-thumbnail','data-url'];
+    document.querySelectorAll('img, source, [data-bg], [data-background-image], [data-bg-src], [data-lazy-background-image]').forEach(el => {
+      for (const a of dataAttrs) { const v = el.getAttribute(a); if (v) add(v); }
+      const bg = el.getAttribute('data-bg') || el.getAttribute('data-bg-src') || el.getAttribute('data-background-image') || el.getAttribute('data-lazy-background-image');
+      if (bg) add(bg);
+      const dss = el.getAttribute('data-srcset') || el.getAttribute('data-lazy-srcset') || el.getAttribute('data-llsrcset') || el.getAttribute('data-defer-srcset');
+      if (dss) dss.split(',').forEach(part => add(part.trim().split(/\s+/)[0]));
+    });
     // Stylesheets and icons
     document.querySelectorAll('link[rel~="stylesheet"][href], link[rel~="icon"][href], link[rel~="apple-touch-icon"][href], link[rel~="mask-icon"][href]').forEach(el => add(el.getAttribute('href')));
 
@@ -756,7 +775,7 @@
           }
           if (!res || !res.ok) {
             // Try background fetch proxy as a fallback for CORS/3P cookie issues
-            const fetched = await fetchViaBackground(url).catch(() => null);
+            const fetched = await fetchViaBackground(url, { signal: controller?.signal }).catch(() => null);
             if (!fetched) throw new Error('Failed to fetch');
             const { blob, mime } = fetched;
             const bytes = blob.size || 0;
@@ -826,7 +845,7 @@
     } catch { return false; }
   }
 
-  function fetchViaBackground(url) {
+  function fetchViaBackground(url, opts = {}) {
     return new Promise((resolve, reject) => {
       const id = Math.random().toString(36).slice(2);
       const onMsg = (msg) => {
@@ -847,6 +866,15 @@
           try { chrome.runtime.onMessage.removeListener(onMsg); } catch (e) { console.error(e); }
         reject(new Error('fetch-timeout'));
       }, 25000);
+      // Abort handling: if an AbortSignal is passed, forward cancel to background
+      try {
+        const signal = opts.signal;
+        if (signal && typeof signal.addEventListener === 'function') {
+          signal.addEventListener('abort', () => {
+            try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_FETCH_CANCEL', id }); } catch {}
+          }, { once: true });
+        }
+      } catch {}
     });
   }
 
@@ -1055,7 +1083,7 @@
     return html;
   }
 
-  async function buildZip({ indexHtml, assets, reportJson, readmeMd, quickCheckHtml, extras = [], sizeCap }) {
+  async function buildZip({ indexHtml, assets, reportJson, readmeMd, quickCheckHtml, extras = [], sizeCap, shouldStop }) {
     const zip = new window.JSZip();
     zip.file('index.html', indexHtml);
     zip.file('quick-check.html', quickCheckHtml);
@@ -1063,6 +1091,7 @@
     zip.file('report/fetch-report.json', reportJson);
     for (const ex of extras) {
       try {
+        if (shouldStop && shouldStop()) throw new Error('stopped');
         let data = ex.data;
         if (ex.type === 'text' && typeof data !== 'string') data = String(data);
         if (ex.type === 'arrayBuffer' && data && data.byteLength !== undefined && !(data instanceof Uint8Array)) data = new Uint8Array(data);
@@ -1071,9 +1100,10 @@
       } catch (e) { console.error('Failed to add extra to ZIP:', ex?.path, e); }
     }
     for (const [_, entry] of assets) {
+      if (shouldStop && shouldStop()) throw new Error('stopped');
       zip.file(entry.path, entry.blob);
     }
-    const blob = await zip.generateAsync({ type: 'blob' });
+    const blob = await zip.generateAsync({ type: 'blob' }, () => { if (shouldStop && shouldStop()) throw new Error('stopped'); });
     if (blob.size > sizeCap) throw new Error('ZIP too large. Try limiting the page.');
     return { blob };
   }
@@ -1222,11 +1252,35 @@
       };
       const pairs = [
         ['data-src','src'], ['data-original','src'], ['data-lazy','src'], ['data-lazy-src','src'], ['data-llsrc','src'],
-        ['data-srcset','srcset'], ['data-lazy-srcset','srcset'], ['data-llsrcset','srcset']
+        ['data-src-large','src'], ['data-src-small','src'], ['data-fallback-src','src'], ['data-image','src'],
+        ['data-srcset','srcset'], ['data-lazy-srcset','srcset'], ['data-llsrcset','srcset'], ['data-defer-srcset','srcset']
       ];
       document.querySelectorAll('img, source').forEach(el => {
         convertAttrs(el, pairs);
-        if (el.tagName === 'IMG') { try { el.loading = 'eager'; el.decoding = 'sync'; } catch {} }
+        if (el.tagName === 'IMG') {
+          try { el.loading = 'eager'; el.decoding = 'sync'; } catch {}
+          // If only srcset is present, materialize a concrete src from the first candidate
+          try {
+            if (!el.getAttribute('src') && el.getAttribute('srcset')){
+              const first = el.getAttribute('srcset').split(',')[0].trim().split(/\s+/)[0];
+              if (first) el.setAttribute('src', first);
+            }
+            if (el.getAttribute('srcset') && !el.getAttribute('sizes')) el.setAttribute('sizes', '100vw');
+          } catch {}
+        }
+      });
+      // Picture sources with lazy srcset
+      document.querySelectorAll('picture source').forEach(s => { try { convertAttrs(s, pairs); } catch {} });
+      // Elements that lazy-load backgrounds via data-bg / data-background-image
+      document.querySelectorAll('[data-bg], [data-bg-src], [data-background-image], [data-lazy-background-image]').forEach(el => {
+        try {
+          const bg = el.getAttribute('data-bg') || el.getAttribute('data-bg-src') || el.getAttribute('data-background-image') || el.getAttribute('data-lazy-background-image');
+          if (bg) {
+            const cs = getComputedStyle(el);
+            const hasBg = (cs.backgroundImage && cs.backgroundImage !== 'none') || (el.style && el.style.backgroundImage);
+            if (!hasBg) el.style.backgroundImage = `url("${bg}")`;
+          }
+        } catch {}
       });
       if (includeVideo) {
         document.querySelectorAll('video, audio, source').forEach(el => convertAttrs(el, pairs));

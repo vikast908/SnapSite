@@ -16,6 +16,9 @@ async function ensureHostPermissionFor(urlStr, sameOrigin) {
 }
 
 chrome.runtime.onMessage.addListener(async (msg, sender) => {
+  // Maintain abort controllers for background fetches so content can cancel promptly
+  if (!globalThis.__bgFetchControllers) globalThis.__bgFetchControllers = new Map();
+  const bgCtrls = globalThis.__bgFetchControllers;
   if (msg?.type === 'GETINSPIRE_CRAWL_POLL') {
     try { sendCrawlProgress(); } catch (e) { console.error(e); }
     return;
@@ -65,15 +68,27 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const canFetch = await ensureHostPermissionFor(url, same);
       if (!canFetch) throw new Error('perm-denied: ' + (new URL(url)).origin);
       try { await ensureGoogleMailHeaderRule(url); } catch {}
-      const res = await fetch(url, { credentials: 'include', mode: 'cors' });
+      const ctl = new AbortController();
+      if (msg.id) { try { bgCtrls.set(msg.id, ctl); } catch {} }
+      const res = await fetch(url, { credentials: 'include', mode: 'cors', signal: ctl.signal });
       if (!res.ok) throw new Error('status ' + res.status);
       const buf = await res.arrayBuffer();
       const type = res.headers.get('content-type') || 'application/octet-stream';
       chrome.tabs.sendMessage(sender.tab.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: true, arrayBuffer: buf, contentType: type });
     } catch (e) {
       try { chrome.tabs.sendMessage(sender?.tab?.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: false, error: String(e) }); } catch (e2) { console.error(e2); }
+    } finally {
+      if (msg?.id) { try { bgCtrls.delete(msg.id); } catch {} }
     }
     return; // handled
+  }
+  if (msg?.type === 'GETINSPIRE_FETCH_CANCEL') {
+    try {
+      const id = msg.id;
+      const ctl = id && bgCtrls.get(id);
+      if (ctl) { try { ctl.abort('cancelled'); } catch {} }
+    } catch {}
+    return;
   }
   // Progress badge updates per-tab
   if (msg?.type === 'GETINSPIRE_PROGRESS') {

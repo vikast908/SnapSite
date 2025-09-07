@@ -24,6 +24,7 @@
     // Always set an effective attribute for CSS targeting convenience
     root.setAttribute('data-theme-effective', eff);
     current = mode;
+    try { updateActionIcon(eff); } catch {}
   }
 
   function onMqlChange(){
@@ -76,6 +77,33 @@
     get((mode) => { apply(mode); });
   }
 
+  async function updateActionIcon(eff){
+    if (!chrome?.action?.setIcon) return;
+    const base = (p) => chrome.runtime.getURL(p);
+    const darkSet = {
+      16: 'assets/icons-dark/16.png',
+      32: 'assets/icons-dark/32.png',
+      48: 'assets/icons-dark/48.png',
+      128: 'assets/icons-dark/128.png',
+    };
+    const lightSet = {
+      16: 'assets/icons/16.png',
+      32: 'assets/icons/32.png',
+      48: 'assets/icons/48.png',
+      128: 'assets/icons/128.png',
+    };
+    async function exists(path){
+      try { const r = await fetch(base(path), { method:'HEAD' }); return r.ok; } catch { return false; }
+    }
+    let use = lightSet;
+    if (eff === 'dark'){
+      // Prefer a dark icon set if present; fallback to default
+      const ok = await exists(darkSet[16]);
+      use = ok ? darkSet : lightSet;
+    }
+    try { await chrome.action.setIcon({ path: Object.fromEntries(Object.entries(use).map(([k,v])=>[k, base(v)])) }); } catch {}
+  }
+
   // Expose API for pages to use
   window.getInspireTheme = {
     get,
@@ -87,4 +115,3 @@
   // Auto-apply on load
   try { init(); } catch {}
 })();
-
