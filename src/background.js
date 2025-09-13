@@ -268,6 +268,13 @@ function sendCrawlProgress() {
     const total = done + __crawlSession.queue.length;
     const status = `Crawling ${done}/${total}`;
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_PROGRESS', running: !!__crawlSession?.running, done, total, status });
+    // Also reflect crawl progress on the extension badge so the user can
+    // see progress without keeping the popup open.
+    try {
+      chrome.action.setBadgeBackgroundColor({ color: '#a855f7' });
+      chrome.action.setBadgeText({ text: String(done) });
+      chrome.action.setTitle({ title: status });
+    } catch (e) { console.error(e); }
   } catch (e) { console.error(e); }
 }
 
@@ -506,6 +513,8 @@ function finishCrawl(reason) {
       }
     } catch (e) { console.error(e); }
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_DONE', done, reason });
+    // Clear global badge after crawl completes
+    try { chrome.action.setBadgeText({ text: '' }); } catch (e) { console.error(e); }
   } catch (e) { console.error(e); }
 }
 

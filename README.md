@@ -17,6 +17,7 @@ All Pages (Site Crawl)
 - Use the popup’s "All pages" button to crawl the current site (same host only) and aggregate multiple pages into one ZIP.
 - Safety caps: defaults to max ~60 pages and ~10 minutes per crawl. You can stop anytime from the popup.
 - Scope: only links on the same host are enqueued; external links are skipped to avoid unbounded crawls.
+ - Runs headless: crawl continues even if you close the popup or switch tabs. The extension badge shows progress; a small in‑page overlay appears on crawled pages with a Stop button.
 
 Theme
 - Choose Light, Dark, or Auto (system) theme.

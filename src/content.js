@@ -340,7 +340,11 @@
             skipVideo: o.skipVideo ?? defaults.skipVideo,
             stripScripts: o.stripScripts ?? defaults.stripScripts,
             fontFallback: o.fontFallback ?? defaults.fontFallback,
-            showOverlay: (typeof window !== 'undefined' && window.__GETINSPIRE_SUPPRESS_OVERLAY) ? false : (o.showOverlay ?? defaults.showOverlay),
+            showOverlay: (typeof window !== 'undefined' && window.__GETINSPIRE_SUPPRESS_OVERLAY)
+              ? false
+              : ((typeof window !== 'undefined' && window.__GETINSPIRE_FORCE_OVERLAY)
+                  ? true
+                  : (o.showOverlay ?? defaults.showOverlay)),
             replaceIframesWithPoster: o.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster,
             // Respect an explicitly empty denylist. Previously, clearing the
             // denylist in the options page would fall back to the built-in
@@ -1377,14 +1381,32 @@
   function createOverlay() {
     try {
       const root = document.createElement('div');
-      root.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;background:rgba(0,0,0,0.8);color:#fff;padding:8px 10px;border-radius:8px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,0.4);min-width:200px;pointer-events:auto;';
-      root.innerHTML = '<div id="gi-status">Starting...</div><div style="margin-top:6px;height:6px;background:#333;border-radius:3px;overflow:hidden;"><div id="gi-bar" style="height:100%;width:0%;background:#3b82f6;transition:width .2s ease"></div></div><div style="margin-top:6px;text-align:right"><button id="gi-stop" style="background:#ef4444;color:#fff;border:0;border-radius:6px;padding:4px 8px;cursor:pointer">Stop</button></div>';
+      const mini = (typeof window !== 'undefined' && window.__GETINSPIRE_OVERLAY_MODE === 'mini');
+      const baseCss = 'position:fixed;z-index:2147483647;background:rgba(0,0,0,0.82);color:#fff;border-radius:8px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 2px 12px rgba(0,0,0,0.4);pointer-events:auto;';
+      const posCss = mini ? 'top:10px;right:10px;min-width:160px;padding:6px 8px;' : 'top:12px;right:12px;min-width:200px;padding:8px 10px;';
+      root.style.cssText = baseCss + posCss;
+      const stopBtnCss = 'background:#ef4444;color:#fff;border:0;border-radius:6px;padding:4px 8px;cursor:pointer';
+      root.innerHTML = (
+        '<div id="gi-status">Starting...</div>'+
+        '<div style="margin-top:6px;height:' + (mini ? '4px' : '6px') + ';background:#333;border-radius:3px;overflow:hidden;">' +
+          '<div id="gi-bar" style="height:100%;width:0%;background:#3b82f6;transition:width .2s ease"></div>'+
+        '</div>'+
+        '<div style="margin-top:6px;text-align:right">' +
+          '<button id="gi-stop" style="' + stopBtnCss + '">Stop</button>' +
+        '</div>'
+      );
       document.documentElement.appendChild(root);
       const statusEl = root.querySelector('#gi-status');
       const barEl = root.querySelector('#gi-bar');
       const stopBtn = root.querySelector('#gi-stop');
       stopBtn.addEventListener('click', () => {
-        try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_STOP' }); } catch {}
+        try {
+          if (typeof window !== 'undefined' && window.__GETINSPIRE_MODE === 'crawl') {
+            chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_STOP' });
+          } else {
+            chrome.runtime.sendMessage({ type: 'GETINSPIRE_STOP' });
+          }
+        } catch {}
         stopBtn.disabled = true;
       });
       return {
