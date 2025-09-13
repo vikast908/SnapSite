@@ -428,6 +428,12 @@ function markCrawlPageDone(tabId) {
 async function crawlPump() {
   const S = __crawlSession;
   if (!S || S.stopped) return finishCrawl('stopped');
+  // Global time cap for crawl session
+  try {
+    if (S.startedAt && S.maxMillis && (Date.now() - S.startedAt > S.maxMillis)) {
+      return finishCrawl('timeout');
+    }
+  } catch {}
   if (S.doneCount >= S.maxPages) return finishCrawl('limit');
   if (S.queue.length === 0 && S.pageByTabId.size === 0) return finishCrawl('done');
   if (S.active) return; // already working
@@ -450,7 +456,16 @@ async function crawlPump() {
     await waitTabComplete(tabId, 45000);
     // Extract links for BFS
     const links = await extractLinks(tabId, nextUrl);
+    // Scope to same-host as the start URL to avoid crawling the entire web
+    let startHost = '';
+    try { startHost = new URL(S.startUrl).hostname || ''; } catch {}
     for (const u of links) {
+      let ok = false;
+      try {
+        const uh = new URL(u).hostname || '';
+        ok = (uh === startHost); // same host only
+      } catch { ok = false; }
+      if (!ok) continue;
       if (!S.visited.has(u) && !S.seen.has(u)) { S.seen.add(u); S.queue.push(u); }
     }
     sendCrawlProgress();
@@ -513,10 +528,14 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         pageByTabId: new Map(),
         pageDoneResolvers: new Map(),
         doneCount: 0,
-        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 200, // soft cap; adjust as needed
+        // Softer defaults to avoid excessively long crawls
+        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 60,
+        // Global time cap (ms) for the whole crawl
+        maxMillis: Number.isFinite(msg.maxMillis) ? msg.maxMillis : 10 * 60 * 1000,
         startTabId: msg.startTabId || null,
         aggTabId: null,
         startUrl,
+        startedAt: Date.now(),
       };
       // Open a dedicated aggregator host page (stable even if user navigates)
       try {

@@ -13,6 +13,11 @@ Use
 - Save the ZIP, unzip it, open `quick-check.html` for a fast sanity check, then `index.html`
   - Quick Check embeds the report inline, so it works even when the browser blocks `fetch()` on `file://` URLs.
 
+All Pages (Site Crawl)
+- Use the popup’s "All pages" button to crawl the current site (same host only) and aggregate multiple pages into one ZIP.
+- Safety caps: defaults to max ~60 pages and ~10 minutes per crawl. You can stop anytime from the popup.
+- Scope: only links on the same host are enqueued; external links are skipped to avoid unbounded crawls.
+
 Theme
 - Choose Light, Dark, or Auto (system) theme.
 - Change it in Options (Theme section) or from the popup header via the Theme button.
@@ -45,6 +50,7 @@ Notes
 - Third-party iframes stay external by design and may not work offline
 - Cross-origin assets can be blocked by CORS/CSP; failures are listed in the report
 - The popup shows live progress during capture
+- For crawls, the progress shows completed/queued pages and ETA; final ZIP downloads automatically unless you’ve disabled "Save without prompt" in Options.
 - In-page overlay shows status with a Stop button during capture
 
 Popup UI Updates
@@ -166,4 +172,3 @@ Developer Notes
 - Testing tips:
   - Use the Quick Check page in the ZIP for a fast sanity pass.
   - Inspect `report/README.md` and `report/asset-manifest.json` for coverage and failures.
-
