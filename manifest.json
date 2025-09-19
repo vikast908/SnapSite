@@ -12,7 +12,9 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "src/defaults.js"
+        "src/defaults.js",
+        "src/ux-patterns.js",
+        "src/ux-patterns-extended.js"
       ],
       "matches": ["<all_urls>"]
     }

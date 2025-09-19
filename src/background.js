@@ -42,9 +42,10 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const pageUrl = msg.package?.pageUrl || (sender?.url || '');
       const title = msg.package?.title || pageUrl;
       const slug = sanitizeFilename(pageUrl).slice(0,80) || 'page';
-      const aggId = __crawlSession.aggTabId || __crawlSession.startTabId;
+      const aggId = __crawlSession.aggTabId;
       if (aggId) {
-        await chrome.runtime.sendMessage({
+        // Send directly to aggregator tab
+        await chrome.tabs.sendMessage(aggId, {
           type: 'GETINSPIRE_AGG_ADD_PAGE',
           slug,
           pageUrl,
@@ -55,7 +56,9 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
           readmeMd: msg.package?.readmeMd || '',
           quickCheckHtml: msg.package?.quickCheckHtml || '',
           extras: msg.package?.extras || []
-        }).catch(()=>{});
+        }).catch((e) => {
+          console.error('Failed to send page to aggregator:', e);
+        });
       }
       if (tabId) markCrawlPageDone(tabId);
     } catch (e) { console.error(e); }
@@ -460,8 +463,8 @@ async function crawlPump() {
   if (S.doneCount >= S.maxPages) return finishCrawl('limit');
   if (S.queue.length === 0 && S.pageByTabId.size === 0) return finishCrawl('done');
 
-  // Process multiple pages in parallel (up to 5 concurrent)
-  const maxConcurrent = 5;
+  // Limit to 2 concurrent pages to prevent memory overload
+  const maxConcurrent = 2;
   while (S.pageByTabId.size < maxConcurrent && S.queue.length > 0 && S.doneCount < S.maxPages) {
     const nextUrl = S.queue.shift();
     if (!nextUrl || S.visited.has(nextUrl)) continue;
@@ -471,8 +474,13 @@ async function crawlPump() {
     (async () => {
       let tabId;
       try {
-        // Open inactive tab and wait load
-        const tab = await chrome.tabs.create({ url: nextUrl, active: false });
+        // Open tab in background (completely hidden)
+        const tab = await chrome.tabs.create({
+          url: nextUrl,
+          active: false,
+          pinned: true,  // Minimize resource usage
+          index: 999  // Place at end
+        });
         tabId = tab.id;
         // Track ownership
         S.pageByTabId.set(tabId, { url: nextUrl });
@@ -525,13 +533,28 @@ function finishCrawl(reason) {
     if (!__crawlSession) return;
     __crawlSession.running = false;
     const done = __crawlSession.doneCount;
+
+    // Close any remaining crawl tabs
+    try {
+      for (const tabId of __crawlSession.pageByTabId.keys()) {
+        chrome.tabs.remove(tabId).catch(()=>{});
+      }
+    } catch {}
+
     // Ask aggregator to finalize a single ZIP
     try {
       const startUrl = __crawlSession.startUrl || '';
       const host = (() => { try { return new URL(startUrl).hostname.replace(/[^a-z0-9.-]/gi,'-'); } catch { return 'site'; } })();
       const filename = `getinspire-site-${host}-${new Date().toISOString().replace(/[:.]/g,'-')}.zip`;
       if (__crawlSession.aggTabId) {
-        chrome.runtime.sendMessage({ type:'GETINSPIRE_AGG_FINALIZE', filename }).catch(()=>{});
+        // Send finalize command to aggregator tab
+        chrome.tabs.sendMessage(__crawlSession.aggTabId, { type:'GETINSPIRE_AGG_FINALIZE', filename }).catch((e) => {
+          console.error('Failed to finalize aggregator:', e);
+        });
+        // Close aggregator tab after a delay
+        setTimeout(() => {
+          try { chrome.tabs.remove(__crawlSession.aggTabId).catch(()=>{}); } catch {}
+        }, 3000);
       }
     } catch (e) { console.error(e); }
     chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_DONE', done, reason });
@@ -567,10 +590,10 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         pageByTabId: new Map(),
         pageDoneResolvers: new Map(),
         doneCount: 0,
-        // Optimized for faster crawls
-        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 100,
-        // Global time cap (ms) for the whole crawl - 1 minute max
-        maxMillis: Number.isFinite(msg.maxMillis) ? msg.maxMillis : 60 * 1000,
+        // Balanced for memory and speed
+        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 50,
+        // Global time cap (ms) for the whole crawl - 2 minutes max
+        maxMillis: Number.isFinite(msg.maxMillis) ? msg.maxMillis : 120 * 1000,
         startTabId: msg.startTabId || null,
         aggTabId: null,
         startUrl: normalizedStartUrl,
@@ -579,13 +602,28 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       // Open a dedicated aggregator host page (stable even if user navigates)
       try {
         const aggUrl = chrome.runtime.getURL('src/aggregator.html');
-        const aggTab = await chrome.tabs.create({ url: aggUrl, active: false });
+        const aggTab = await chrome.tabs.create({
+          url: aggUrl,
+          active: false,
+          pinned: true  // Keep it minimal
+        });
         __crawlSession.aggTabId = aggTab.id;
         await waitTabComplete(__crawlSession.aggTabId, 10000).catch(()=>{});
-        await chrome.runtime.sendMessage({ type: 'GETINSPIRE_AGG_INIT', title: `GetInspire Site Snapshot: ${new URL(startUrl).hostname}` }).catch(()=>{});
+        // Wait a bit for aggregator to initialize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Send init message to aggregator tab
+        await chrome.tabs.sendMessage(__crawlSession.aggTabId, {
+          type: 'GETINSPIRE_AGG_INIT',
+          title: `GetInspire Site Snapshot: ${new URL(normalizedStartUrl).hostname}`
+        }).catch((e) => {
+          console.error('Failed to init aggregator:', e);
+        });
+        // Wait for aggregator to be ready
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (e) { console.error('Aggregator host failed', e); }
       sendCrawlProgress();
-      crawlPump();
+      // Start crawling after aggregator is ready
+      setTimeout(() => crawlPump(), 1000);
     } catch (e) {
       console.error(e);
       chrome.runtime.sendMessage({ type:'GETINSPIRE_ERROR', error: String(e) });

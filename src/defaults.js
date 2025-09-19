@@ -15,6 +15,8 @@ export const defaults = {
   stripScripts: true,
   fontFallback: true,
   showOverlay: false,
+  expandCarousels: true,  // Expand all carousel slides for capture
+  normalizeUX: true,  // Normalize all interactive UX patterns
   denylist: [
     String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
     String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),

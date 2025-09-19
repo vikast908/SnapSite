@@ -48,6 +48,18 @@
     if (options.showOverlay) overlay = createOverlay();
     const denylistRe = compileDenylist(options.denylist);
 
+    // Load UX pattern handlers
+    let uxPatternHandler = null;
+    let uxExtendedHandler = null;
+    try {
+      const module = await import(chrome.runtime.getURL('src/ux-patterns.js'));
+      uxPatternHandler = module.normalizeAllUXPatterns;
+      const extModule = await import(chrome.runtime.getURL('src/ux-patterns-extended.js'));
+      uxExtendedHandler = extModule.normalizeExtendedUXPatterns;
+    } catch (e) {
+      console.warn('UX pattern handler not available:', e);
+    }
+
     // Denylist gate
     state.report.endlessDetection.deniedByList = denylistRe.some(re => re.test(location.href));
     if (state.report.endlessDetection.deniedByList) {
@@ -78,6 +90,45 @@
     try {
       sendStatus('Normalizing lazy media & carousels...');
       await normalizePageForSnapshot({ includeVideo: !options.skipVideo });
+      // Extra carousel preparation step (if enabled)
+      if (options.expandCarousels !== false) {
+        sendStatus('Preparing carousels for capture...');
+        await prepareCarouselsForCapture();
+      }
+
+      // Apply comprehensive UX pattern normalization
+      if (options.normalizeUX !== false) {
+        sendStatus('Normalizing interactive elements...');
+        let totalProcessed = 0;
+        let allPatterns = [];
+
+        // Main UX patterns
+        if (uxPatternHandler) {
+          const uxResults = await uxPatternHandler(options);
+          console.log('[GetInspire] UX normalization results:', uxResults);
+          if (uxResults) {
+            totalProcessed += uxResults.totalProcessed || 0;
+            allPatterns = allPatterns.concat(uxResults.patterns || []);
+          }
+        }
+
+        // Extended UX patterns
+        if (uxExtendedHandler) {
+          const extResults = await uxExtendedHandler(options);
+          console.log('[GetInspire] Extended UX results:', extResults);
+          if (extResults) {
+            totalProcessed += extResults.totalProcessed || 0;
+            allPatterns = allPatterns.concat(extResults.patterns || []);
+          }
+        }
+
+        // Add comprehensive pattern info to report
+        if (allPatterns.length > 0) {
+          state.report.notes.push(
+            `Processed ${totalProcessed} UI elements across ${allPatterns.length} pattern types`
+          );
+        }
+      }
     } catch (e) { console.error(e); }
 
     // Snapshot canvas-heavy UIs (e.g., Google Sheets/Slides) to static images
@@ -600,6 +651,25 @@
       if (bg) add(bg);
       const dss = el.getAttribute('data-srcset') || el.getAttribute('data-lazy-srcset') || el.getAttribute('data-llsrcset') || el.getAttribute('data-defer-srcset');
       if (dss) dss.split(',').forEach(part => add(part.trim().split(/\s+/)[0]));
+    });
+
+    // Special handling for carousel images that might be hidden or lazy-loaded
+    const carouselImages = document.querySelectorAll(
+      '.carousel img, .slider img, .swiper img, .slick img, ' +
+      '[class*="carousel"] img, [class*="slider"] img, ' +
+      '.carousel-item img, .slide img, .swiper-slide img, .slick-slide img'
+    );
+    carouselImages.forEach(img => {
+      // Check all possible image sources
+      ['src', 'data-src', 'data-lazy', 'data-original', 'data-lazy-src'].forEach(attr => {
+        const val = img.getAttribute(attr);
+        if (val && !val.startsWith('data:')) add(val);
+      });
+      // Also check srcset variants
+      ['srcset', 'data-srcset', 'data-lazy-srcset'].forEach(attr => {
+        const val = img.getAttribute(attr);
+        if (val) val.split(',').forEach(part => add(part.trim().split(/\s+/)[0]));
+      });
     });
     // Stylesheets and icons
     document.querySelectorAll('link[rel~="stylesheet"][href], link[rel~="icon"][href], link[rel~="apple-touch-icon"][href], link[rel~="mask-icon"][href]').forEach(el => add(el.getAttribute('href')));
@@ -1176,12 +1246,11 @@
       if (shouldStop && shouldStop()) throw new Error('stopped');
       zip.file(entry.path, entry.blob);
     }
-    // Use STORE compression for faster ZIP creation (no compression)
-    // This trades file size for speed - good for local storage
+    // Use DEFLATE compression for better file size
     const blob = await zip.generateAsync({
       type: 'blob',
-      compression: 'STORE',  // No compression for speed
-      streamFiles: true  // Stream for better memory usage
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 }  // Balanced compression
     }, () => { if (shouldStop && shouldStop()) throw new Error('stopped'); });
     if (blob.size > sizeCap) throw new Error('ZIP too large. Try limiting the page.');
     return { blob };
@@ -1319,6 +1388,252 @@
     return lines.join('\n');
   }
 
+  // Enhanced carousel handler for all major libraries
+  async function handleCarousels() {
+    try {
+      const isYouTubeDomain = /(^|\.)youtube\.com$/i.test(location.hostname||'');
+
+      // Comprehensive carousel selectors
+      const carouselSelectors = [
+        // Class-based selectors
+        '[class*="carousel"]',
+        '[class*="slider"]',
+        '[class*="slick"]',
+        '[class*="swiper"]',
+        '[class*="glide"]',
+        '[class*="flickity"]',
+        '[class*="owl-carousel"]',
+        '[class*="splide"]',
+        '[class*="keen-slider"]',
+        '[class*="embla"]',
+        '[class*="tiny-slider"]',
+        // Data attribute selectors
+        '[data-carousel]',
+        '[data-slider]',
+        '[data-swiper]',
+        // Role-based
+        '[role="carousel"]',
+        // Common wrapper classes
+        '.carousel',
+        '.slider',
+        '.swiper-container',
+        '.slick-slider',
+        '.glide',
+        '.flickity-enabled'
+      ];
+
+      const carousels = document.querySelectorAll(carouselSelectors.join(', '));
+
+      for (const carousel of carousels) {
+        try {
+          // 1. Make all slides visible
+          const slides = carousel.querySelectorAll(
+            '.slide, .carousel-item, .swiper-slide, .slick-slide, ' +
+            '.glide__slide, .flickity-cell, .splide__slide, .embla__slide, ' +
+            '[data-slide], [role="slide"]'
+          );
+
+          slides.forEach(slide => {
+            try {
+              // Force display
+              if (getComputedStyle(slide).display === 'none') {
+                slide.style.display = 'block';
+              }
+              // Remove hiding classes
+              slide.classList.remove('hidden', 'd-none', 'inactive', 'is-hidden');
+              // Ensure visibility
+              slide.style.visibility = 'visible';
+              slide.style.opacity = '1';
+              // Remove transform that might hide slides
+              if (!isYouTubeDomain) {
+                slide.style.transform = 'none';
+              }
+            } catch {}
+          });
+
+          // 2. Expand carousel container
+          const cs = getComputedStyle(carousel);
+          if (cs.overflowX === 'hidden' || /hidden|clip/.test(cs.overflow)) {
+            carousel.style.overflow = 'visible';
+          }
+
+          // 3. Handle specific libraries
+          handleSpecificCarouselLibrary(carousel);
+
+          // 4. Load lazy images in carousel
+          const lazyImages = carousel.querySelectorAll(
+            'img[data-src], img[data-lazy], img.lazy, img[loading="lazy"]'
+          );
+          lazyImages.forEach(img => {
+            const dataSrc = img.getAttribute('data-src') || img.getAttribute('data-lazy');
+            if (dataSrc && !img.src) {
+              img.src = dataSrc;
+              img.removeAttribute('loading');
+            }
+          });
+
+          // 5. Neutralize transforms (skip on YouTube)
+          if (!isYouTubeDomain && cs.transform && cs.transform !== 'none') {
+            carousel.style.transform = 'none';
+          }
+
+          // 6. Auto-advance carousel to load all slides
+          await autoAdvanceCarousel(carousel);
+
+        } catch (e) {
+          console.warn('Carousel handling error:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to handle carousels:', e);
+    }
+  }
+
+  function handleSpecificCarouselLibrary(carousel) {
+    try {
+      // Swiper specific
+      if (carousel.classList.contains('swiper-container') || carousel.classList.contains('swiper')) {
+        const wrapper = carousel.querySelector('.swiper-wrapper');
+        if (wrapper) {
+          wrapper.style.transform = 'none';
+          wrapper.style.display = 'flex';
+          wrapper.style.flexWrap = 'wrap';
+        }
+      }
+
+      // Slick specific
+      if (carousel.classList.contains('slick-slider')) {
+        const track = carousel.querySelector('.slick-track');
+        if (track) {
+          track.style.transform = 'none';
+          track.style.display = 'flex';
+          track.style.flexWrap = 'wrap';
+        }
+        // Show all cloned slides too
+        carousel.querySelectorAll('.slick-cloned').forEach(el => {
+          el.style.display = 'block';
+        });
+      }
+
+      // Bootstrap Carousel
+      if (carousel.classList.contains('carousel') && carousel.querySelector('.carousel-inner')) {
+        const items = carousel.querySelectorAll('.carousel-item');
+        items.forEach(item => {
+          item.classList.add('active');
+          item.style.display = 'block';
+        });
+      }
+
+      // Owl Carousel
+      if (carousel.classList.contains('owl-carousel')) {
+        const stage = carousel.querySelector('.owl-stage, .owl-stage-outer');
+        if (stage) {
+          stage.style.display = 'flex';
+          stage.style.flexWrap = 'wrap';
+        }
+      }
+    } catch (e) {
+      console.warn('Library-specific carousel handling error:', e);
+    }
+  }
+
+  async function autoAdvanceCarousel(carousel) {
+    try {
+      // Try to find and click next buttons to load all slides
+      const nextButtons = carousel.querySelectorAll(
+        '.next, .carousel-control-next, .swiper-button-next, ' +
+        '.slick-next, [data-slide="next"], [aria-label*="next"], ' +
+        'button[class*="next"], button[class*="arrow"]'
+      );
+
+      if (nextButtons.length > 0) {
+        const button = nextButtons[0];
+        // Try clicking through all slides (max 20 to avoid infinite loops)
+        for (let i = 0; i < 20; i++) {
+          if (button.disabled || button.classList.contains('disabled')) break;
+          button.click();
+          await new Promise(r => setTimeout(r, 100)); // Small delay between clicks
+        }
+      }
+    } catch {}
+  }
+
+  // Prepare all carousels for final capture
+  async function prepareCarouselsForCapture() {
+    try {
+      // Find all carousel containers
+      const carousels = document.querySelectorAll(
+        '.carousel, .slider, .swiper-container, .slick-slider, ' +
+        '[class*="carousel"], [class*="slider"], [data-carousel]'
+      );
+
+      for (const carousel of carousels) {
+        try {
+          // Create a grid layout for all slides
+          const slides = carousel.querySelectorAll(
+            '.slide, .carousel-item, .swiper-slide, .slick-slide, ' +
+            '[data-slide], [role="slide"]'
+          );
+
+          if (slides.length > 1) {
+            // Option 1: Stack all slides vertically (most reliable)
+            carousel.style.display = 'block';
+            carousel.style.overflow = 'visible';
+            carousel.style.height = 'auto';
+
+            slides.forEach((slide, index) => {
+              slide.style.display = 'block';
+              slide.style.position = 'relative';
+              slide.style.opacity = '1';
+              slide.style.visibility = 'visible';
+              slide.style.transform = 'none';
+              slide.style.width = '100%';
+              slide.style.marginBottom = '20px';
+              // Add a separator
+              if (index > 0) {
+                slide.style.borderTop = '2px dashed #ccc';
+                slide.style.paddingTop = '20px';
+              }
+            });
+
+            // Remove any wrapper transforms
+            const wrappers = carousel.querySelectorAll(
+              '.swiper-wrapper, .slick-track, .carousel-inner'
+            );
+            wrappers.forEach(wrapper => {
+              wrapper.style.transform = 'none';
+              wrapper.style.display = 'block';
+              wrapper.style.width = '100%';
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to prepare carousel:', e);
+        }
+      }
+
+      // Force all carousel images to load
+      const carouselImages = document.querySelectorAll(
+        '.carousel img, .slider img, [class*="carousel"] img'
+      );
+      const imagePromises = [];
+      carouselImages.forEach(img => {
+        if (!img.complete) {
+          imagePromises.push(new Promise(resolve => {
+            img.addEventListener('load', resolve, { once: true });
+            img.addEventListener('error', resolve, { once: true });
+            setTimeout(resolve, 2000); // Timeout fallback
+          }));
+        }
+      });
+
+      if (imagePromises.length > 0) {
+        await Promise.allSettled(imagePromises);
+      }
+    } catch (e) {
+      console.error('Failed to prepare carousels:', e);
+    }
+  }
+
   // ---- Normalization helpers for better fidelity ----
   async function normalizePageForSnapshot({ includeVideo }) {
     try {
@@ -1346,11 +1661,14 @@
           if (!el.getAttribute('src') && el.getAttribute('srcset')){
             const first = el.getAttribute('srcset').split(',')[0].trim().split(/\s+/)[0];
             if (first) el.setAttribute('src', first);
-            }
-            if (el.getAttribute('srcset') && !el.getAttribute('sizes')) el.setAttribute('sizes', '100vw');
-          } catch {}
-        }
-      });
+          }
+          if (el.getAttribute('srcset') && !el.getAttribute('sizes')) el.setAttribute('sizes', '100vw');
+        } catch {}
+      }
+
+      for (const el of sources) {
+        convertAttrs(el, pairs);
+      }
       // Picture sources with lazy srcset
       document.querySelectorAll('picture source').forEach(s => { try { convertAttrs(s, pairs); } catch {} });
       // Elements that lazy-load backgrounds via data-bg / data-background-image
@@ -1374,18 +1692,8 @@
         Promise.allSettled(pending.map(im => im.decode ? im.decode().catch(()=>{}) : new Promise(r=>{ im.addEventListener('load',r,{once:true}); im.addEventListener('error',r,{once:true}); setTimeout(r,1500);}))),
         new Promise(r => setTimeout(r, 2500))
       ]);
-      // Loosen obvious carousels so slides aren't cropped, but avoid global
-      // transform resets which can badly distort iconography (e.g., YouTube).
-      const isYouTubeDomain = /(^|\.)youtube\.com$/i.test(location.hostname||'');
-      const carSel = '[class*="carousel"], [class*="slider"], [class*="slick"], [class*="swiper"], [data-carousel]';
-      document.querySelectorAll(carSel).forEach(c => {
-        try {
-          const cs = getComputedStyle(c);
-          if (cs.overflowX === 'hidden' || /hidden|clip/.test(cs.overflow)) c.style.overflow = 'visible';
-          // Only neutralize transforms on typical carousel wrappers; skip on YouTube
-          if (!isYouTubeDomain && cs.transform && cs.transform !== 'none') c.style.transform = 'none';
-        } catch {}
-      });
+      // Enhanced carousel handling for all major libraries
+      await handleCarousels();
       // Global transform stripping removed (caused giant icons on some sites).
     } catch (e) { console.error(e); }
   }
