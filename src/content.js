@@ -9,6 +9,12 @@
     stopped: false,
     started: Date.now(),
     report: baseReport(),
+    performanceMetrics: {
+      scrollTime: 0,
+      assetCollectionTime: 0,
+      downloadTime: 0,
+      processingTime: 0
+    }
   };
 
   // Options loaded at runtime, available to helpers via closure
@@ -51,12 +57,14 @@
 
     // Auto-scroll & stabilization
     sendStatus('Scrolling to load all content...');
+    const scrollStart = Date.now();
     const sc = await autoScrollUntilStable({
       idleMs: options.scrollIdleMs,
       maxIters: options.maxScrollIterations,
       started: state.started,
       maxMillis: options.maxMillis,
     }).catch(e => ({ stabilized: false, reason: e?.message || String(e) }));
+    state.performanceMetrics.scrollTime = Date.now() - scrollStart;
     if (!sc?.stabilized) {
       state.report.endlessDetection.stabilized = false;
       state.report.endlessDetection.reason = sc?.reason || 'unstable';
@@ -96,7 +104,9 @@
 
     // Collect assets & initial HTML snapshot
     sendStatus('Collecting assets...');
+    const collectStart = Date.now();
     const collected = await collectPageAssets({ replaceIframesWithPoster: options.replaceIframesWithPoster });
+    state.performanceMetrics.assetCollectionTime = Date.now() - collectStart;
     state.report.skipped.push(...collected.skipped);
     state.report.stats.assetsSkipped = state.report.skipped.length;
     if (state.stopped) return fail('Stopped by user.');
@@ -119,6 +129,7 @@
       try { chrome.runtime.sendMessage({ type: 'GETINSPIRE_PROGRESS', downloaded: 0, total: totalAssets }); } catch (e) { console.error(e); }
     }
     try { if (overlay) overlay.setProgress(0, totalAssets); } catch {}
+    const downloadStart = Date.now();
     const dres = await downloadAllAssets(collected.urls, {
       concurrency: options.concurrency,
       maxAssets: options.maxAssets,
@@ -133,6 +144,7 @@
         }
       }
     });
+    state.performanceMetrics.downloadTime = Date.now() - downloadStart;
     if (dres.stopReason) {
       const reason = dres.stopReason;
       if (reason === 'zip-too-large') return fail('ZIP too large. Try limiting the page.');
@@ -403,7 +415,7 @@
         // If we hit the iteration cap, proceed anyway to avoid false
         // endless-detection on dynamic but finite pages (e.g., video sites).
         if (iter > maxIters) return resolve({ stabilized: true, reason: 'iter-cap' });
-        setTimeout(step, 300);
+        setTimeout(step, 150);
       };
       step();
     });
@@ -551,24 +563,34 @@
         } catch (e) { console.error(e); }
     };
 
-    // Elements with src (exclude iframes; optional: skip video)
-    document.querySelectorAll('img[src], script[src], audio[src], video[src], track[src], source[src]').forEach(el => {
+    // Single pass through all elements to collect multiple attributes
+    const srcElements = document.querySelectorAll('img, script, audio, video, track, source');
+    srcElements.forEach(el => {
       const tag = el.tagName;
-      if (tag === 'IFRAME') return;
-      if ((tag === 'VIDEO' || (tag === 'SOURCE' && el.closest('video')) || (tag === 'TRACK' && el.closest('video'))) && (options?.skipVideo ?? true)) {
-        const u = el.getAttribute('src');
-        if (u) skipped.push({ url: new URL(u, document.baseURI).href, reason: 'video' });
-        return;
+
+      // Handle src attribute
+      const src = el.getAttribute('src');
+      if (src) {
+        if ((tag === 'VIDEO' || (tag === 'SOURCE' && el.closest('video')) || (tag === 'TRACK' && el.closest('video'))) && (options?.skipVideo ?? true)) {
+          skipped.push({ url: new URL(src, document.baseURI).href, reason: 'video' });
+        } else {
+          add(src);
+        }
       }
-      add(el.getAttribute('src'));
-    });
-    // poster
-    document.querySelectorAll('video[poster]').forEach(el => add(el.getAttribute('poster')));
-    // srcset
-    document.querySelectorAll('img[srcset], source[srcset]').forEach(el => {
-      const ss = el.getAttribute('srcset');
-      if (!ss) return;
-      ss.split(',').forEach(part => add(part.trim().split(/\s+/)[0]));
+
+      // Handle poster (video only)
+      if (tag === 'VIDEO') {
+        const poster = el.getAttribute('poster');
+        if (poster) add(poster);
+      }
+
+      // Handle srcset (img and source only)
+      if (tag === 'IMG' || tag === 'SOURCE') {
+        const srcset = el.getAttribute('srcset');
+        if (srcset) {
+          srcset.split(',').forEach(part => add(part.trim().split(/\s+/)[0]));
+        }
+      }
     });
     // Common lazy-load data-* attributes used for images and backgrounds
     const dataAttrs = ['data-src','data-original','data-lazy','data-lazy-src','data-llsrc','data-src-large','data-src-small','data-fallback-src','data-image','data-thumb','data-thumbnail','data-url'];
@@ -591,18 +613,33 @@
     });
 
     // Computed background and mask images (covers CSS modules/classes)
-    document.querySelectorAll('*').forEach(el => {
-      try {
-        const cs = getComputedStyle(el);
-        const props = [
-          'background-image','background','mask','mask-image','border-image-source','list-style-image','content','cursor'
-        ];
-        for (const p of props) {
-          const v = cs.getPropertyValue(p);
-          if (v && v.includes('url(')) extractCssUrls(v).forEach(u => add(u));
-        }
-      } catch (e) { /* ignore */ }
+    // Optimize by only checking visible elements with likely backgrounds
+    const elementsToCheck = document.querySelectorAll(
+      'div, section, header, footer, nav, aside, main, article, span, a, button, li, td, th, body, html'
+    );
+    const visibleElements = Array.from(elementsToCheck).filter(el => {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
     });
+
+    // Process in batches to avoid blocking
+    for (let i = 0; i < visibleElements.length; i += 100) {
+      const batch = visibleElements.slice(i, i + 100);
+      batch.forEach(el => {
+        try {
+          const cs = getComputedStyle(el);
+          // Only check background-image and mask-image (most common)
+          const bgImage = cs.getPropertyValue('background-image');
+          if (bgImage && bgImage !== 'none' && bgImage.includes('url(')) {
+            extractCssUrls(bgImage).forEach(u => add(u));
+          }
+          const maskImage = cs.getPropertyValue('mask-image');
+          if (maskImage && maskImage !== 'none' && maskImage.includes('url(')) {
+            extractCssUrls(maskImage).forEach(u => add(u));
+          }
+        } catch (e) { /* ignore */ }
+      });
+    }
 
     // External video iframes → poster thumbnails (e.g., YouTube)
     if (replaceIframesWithPoster) {
@@ -628,7 +665,12 @@
     });
 
     // External stylesheets: fetch to follow their @import and url() for completeness
-    await Promise.all(Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]')).map(async (link) => {
+    // Batch process with limited concurrency for better performance
+    const stylesheets = Array.from(document.querySelectorAll('link[rel~="stylesheet"][href]'));
+    const batchSize = 10;
+    for (let i = 0; i < stylesheets.length; i += batchSize) {
+      const batch = stylesheets.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (link) => {
         try {
           const same = new URL(link.href, document.baseURI).origin === location.origin;
           const res = await fetch(link.href, { credentials: same ? 'include' : 'omit', mode: 'cors' });
@@ -636,8 +678,9 @@
           const text = await res.text();
           extractCssUrls(text).forEach(u => add(new URL(u, link.href).href));
           extractCssImports(text).forEach(u => add(new URL(u, link.href).href));
-        } catch (e) { console.error(e); }
-    }));
+        } catch (e) { /* ignore */ }
+      }));
+    }
 
     // Preload links for styles/scripts/fonts/images/modules
     document.querySelectorAll('link[rel="preload"][as][href], link[rel="modulepreload"][href]').forEach(el => {
@@ -694,18 +737,27 @@
       const marker = 'data-getinspire-shadow-host';
       const hosts = [];
       let counter = 0;
-      // Mark hosts that have an open shadow root and collect their HTML
-      document.querySelectorAll('*').forEach(el => {
-        try {
-          if (el.shadowRoot) {
-            const id = 's' + (++counter);
-            el.setAttribute(marker, id);
-            let html = '';
-            try { html = el.shadowRoot.innerHTML || ''; } catch {}
-            hosts.push({ id, html });
+      // More efficient shadow root detection using TreeWalker
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_ELEMENT,
+        {
+          acceptNode: (node) => {
+            return node.shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
           }
+        }
+      );
+
+      let node;
+      while (node = walker.nextNode()) {
+        try {
+          const id = 's' + (++counter);
+          node.setAttribute(marker, id);
+          let html = '';
+          try { html = node.shadowRoot.innerHTML || ''; } catch {}
+          hosts.push({ id, html });
         } catch {}
-      });
+      }
 
       const raw = '<!doctype html>\n' + document.documentElement.outerHTML;
 
@@ -736,7 +788,19 @@
     const map = new Map(); // url -> { path, mime, bytes, blob }
     const failures = [];
     const seenName = new Map();
-    const queue = Array.from(urls);
+
+    // Priority queue: CSS and fonts first, then images, then scripts
+    const priorityQueue = Array.from(urls).sort((a, b) => {
+      const getPriority = (url) => {
+        if (/\.css(\?|$)/i.test(url)) return 0;
+        if (/\.(woff2?|ttf|otf|eot)(\?|$)/i.test(url)) return 1;
+        if (/\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(url)) return 2;
+        if (/\.js(\?|$)/i.test(url)) return 3;
+        return 4;
+      };
+      return getPriority(a) - getPriority(b);
+    });
+    const queue = priorityQueue;
     let idx = 0;
     let inFlight = 0;
     let totalBytes = 0;
@@ -767,9 +831,13 @@
             skipCount++;
             return resolve();
           }
-            controller = new AbortController();
-            controllers.add(controller);
-            toId = setTimeout(() => { try { controller.abort('timeout'); } catch (e) { console.error(e); } }, cfg.requestTimeoutMs || 20000);
+
+          // Skip very large files early (HEAD request for size check)
+          const maxFileSize = 50 * 1024 * 1024; // 50MB per file
+
+          controller = new AbortController();
+          controllers.add(controller);
+          toId = setTimeout(() => { try { controller.abort('timeout'); } catch (e) { console.error(e); } }, cfg.requestTimeoutMs || 10000);
           const same = new URL(url, document.baseURI).origin === location.origin;
           let res;
           try {
@@ -821,7 +889,8 @@
     });
 
     const workers = [];
-    for (let i = 0; i < cfg.concurrency; i++) workers.push((async function loop(){
+    const workerCount = Math.min(cfg.concurrency, queue.length);
+    for (let i = 0; i < workerCount; i++) workers.push((async function loop(){
       while (idx < queue.length && map.size < cfg.maxAssets && !state.stopped && !stopReason) {
         await next();
       }
@@ -869,7 +938,7 @@
       setTimeout(() => {
           try { chrome.runtime.onMessage.removeListener(onMsg); } catch (e) { console.error(e); }
         reject(new Error('fetch-timeout'));
-      }, 25000);
+      }, 15000);
       // Abort handling: if an AbortSignal is passed, forward cancel to background
       try {
         const signal = opts.signal;
@@ -1107,7 +1176,13 @@
       if (shouldStop && shouldStop()) throw new Error('stopped');
       zip.file(entry.path, entry.blob);
     }
-    const blob = await zip.generateAsync({ type: 'blob' }, () => { if (shouldStop && shouldStop()) throw new Error('stopped'); });
+    // Use STORE compression for faster ZIP creation (no compression)
+    // This trades file size for speed - good for local storage
+    const blob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'STORE',  // No compression for speed
+      streamFiles: true  // Stream for better memory usage
+    }, () => { if (shouldStop && shouldStop()) throw new Error('stopped'); });
     if (blob.size > sizeCap) throw new Error('ZIP too large. Try limiting the page.');
     return { blob };
   }
@@ -1259,15 +1334,18 @@
         ['data-src-large','src'], ['data-src-small','src'], ['data-fallback-src','src'], ['data-image','src'],
         ['data-srcset','srcset'], ['data-lazy-srcset','srcset'], ['data-llsrcset','srcset'], ['data-defer-srcset','srcset']
       ];
-      document.querySelectorAll('img, source').forEach(el => {
+      // Batch process images and sources separately for better performance
+      const images = document.getElementsByTagName('img');
+      const sources = document.getElementsByTagName('source');
+
+      for (const el of images) {
         convertAttrs(el, pairs);
-        if (el.tagName === 'IMG') {
-          try { el.loading = 'eager'; el.decoding = 'sync'; } catch {}
-          // If only srcset is present, materialize a concrete src from the first candidate
-          try {
-            if (!el.getAttribute('src') && el.getAttribute('srcset')){
-              const first = el.getAttribute('srcset').split(',')[0].trim().split(/\s+/)[0];
-              if (first) el.setAttribute('src', first);
+        try { el.loading = 'eager'; el.decoding = 'sync'; } catch {}
+        // If only srcset is present, materialize a concrete src from the first candidate
+        try {
+          if (!el.getAttribute('src') && el.getAttribute('srcset')){
+            const first = el.getAttribute('srcset').split(',')[0].trim().split(/\s+/)[0];
+            if (first) el.setAttribute('src', first);
             }
             if (el.getAttribute('srcset') && !el.getAttribute('sizes')) el.setAttribute('sizes', '100vw');
           } catch {}

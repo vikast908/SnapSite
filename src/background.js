@@ -1,5 +1,7 @@
 // In-memory cache to reduce duplicate permission prompts in-session
 const __grantedOrigins = new Set();
+// Asset cache to avoid refetching the same resources (15 minute TTL)
+const __assetCache = new Map();
 
 async function ensureHostPermissionFor(urlStr, sameOrigin) {
   try {
@@ -68,12 +70,28 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const canFetch = await ensureHostPermissionFor(url, same);
       if (!canFetch) throw new Error('perm-denied: ' + (new URL(url)).origin);
       try { await ensureGoogleMailHeaderRule(url); } catch {}
+      // Check cache first
+      const cacheKey = url;
+      const cached = __assetCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) { // 15 min cache
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: true, arrayBuffer: cached.buffer, contentType: cached.type });
+        return;
+      }
       const ctl = new AbortController();
       if (msg.id) { try { bgCtrls.set(msg.id, ctl); } catch {} }
       const res = await fetch(url, { credentials: 'include', mode: 'cors', signal: ctl.signal });
       if (!res.ok) throw new Error('status ' + res.status);
       const buf = await res.arrayBuffer();
       const type = res.headers.get('content-type') || 'application/octet-stream';
+      // Cache the response
+      __assetCache.set(cacheKey, { buffer: buf, type, timestamp: Date.now() });
+      // Clean old cache entries
+      if (__assetCache.size > 500) {
+        const now = Date.now();
+        for (const [k, v] of __assetCache) {
+          if (now - v.timestamp > 15 * 60 * 1000) __assetCache.delete(k);
+        }
+      }
       chrome.tabs.sendMessage(sender.tab.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: true, arrayBuffer: buf, contentType: type });
     } catch (e) {
       try { chrome.tabs.sendMessage(sender?.tab?.id, { type: 'GETINSPIRE_FETCH_RESULT', id: msg.id, ok: false, error: String(e) }); } catch (e2) { console.error(e2); }
@@ -316,7 +334,7 @@ function sanitizeFilename(text) {
     .slice(0, 80) || 'page';
 }
 
-async function waitTabComplete(tabId, timeoutMs = 45000) {
+async function waitTabComplete(tabId, timeoutMs = 15000) {
   const start = Date.now();
   try {
     const t = await chrome.tabs.get(tabId).catch(() => null);
@@ -357,21 +375,19 @@ async function extractLinks(tabId, baseUrl) {
           } catch { return u; }
         };
         const skipExt = /\.(png|jpe?g|gif|webp|svg|ico|css|js|mjs|json|map|xml|txt|pdf|zip|rar|7z|tar|gz|mp4|webm|og[gv]|mp3|wav|mov|avi|mkv|dmg|exe|msi)(\?.*)?$/i;
-        document.querySelectorAll('a[href]').forEach(a => {
-          let href = (a.getAttribute('href') || '').trim();
-          if (!href) return;
-          if (href.startsWith('#')) return;
-          if (/^(javascript:|mailto:|tel:)/i.test(href)) return;
-          const u = abs(href);
-          if (!u) return;
+        const skipScheme = /^(#|javascript:|mailto:|tel:|data:|blob:)/i;
+        const links = document.querySelectorAll('a[href]');
+        for (const a of links) {
+          const href = (a.href || '').trim();
+          if (!href || skipScheme.test(href)) continue;
           try {
-            const uo = new URL(u);
-            if (!/^https?:$/i.test(uo.protocol)) return;
+            const uo = new URL(href, base || document.baseURI);
+            if (!/^https?:$/i.test(uo.protocol)) continue;
+            if (skipExt.test(uo.pathname)) continue;
             uo.hash = '';
-            if (skipExt.test(uo.pathname)) return;
             out.add(canonicalize(uo.href));
           } catch {}
-        });
+        }
         return Array.from(out);
       },
       args: [baseUrl || '']
@@ -443,58 +459,64 @@ async function crawlPump() {
   } catch {}
   if (S.doneCount >= S.maxPages) return finishCrawl('limit');
   if (S.queue.length === 0 && S.pageByTabId.size === 0) return finishCrawl('done');
-  if (S.active) return; // already working
-  const nextUrl = S.queue.shift();
-  if (!nextUrl) {
-    // Wait for in-flight pages
-    sendCrawlProgress();
-    return;
-  }
-  if (S.visited.has(nextUrl)) { setTimeout(crawlPump, 0); return; }
-  S.visited.add(nextUrl);
-  S.active = true;
-  sendCrawlProgress();
-  try {
-    // Open inactive tab and wait load
-    const tab = await chrome.tabs.create({ url: nextUrl, active: false });
-    const tabId = tab.id;
-    // Track ownership
-    S.pageByTabId.set(tabId, { url: nextUrl });
-    await waitTabComplete(tabId, 45000);
-    // Extract links for BFS
-    const links = await extractLinks(tabId, nextUrl);
-    // Scope to same-host as the start URL to avoid crawling the entire web
-    let startHost = '';
-    try { startHost = new URL(S.startUrl).hostname || ''; } catch {}
-    for (const u of links) {
-      let ok = false;
+
+  // Process multiple pages in parallel (up to 5 concurrent)
+  const maxConcurrent = 5;
+  while (S.pageByTabId.size < maxConcurrent && S.queue.length > 0 && S.doneCount < S.maxPages) {
+    const nextUrl = S.queue.shift();
+    if (!nextUrl || S.visited.has(nextUrl)) continue;
+    S.visited.add(nextUrl);
+
+    // Process page asynchronously without blocking
+    (async () => {
+      let tabId;
       try {
-        const uh = new URL(u).hostname || '';
-        ok = (uh === startHost); // same host only
-      } catch { ok = false; }
-      if (!ok) continue;
-      if (!S.visited.has(u) && !S.seen.has(u)) { S.seen.add(u); S.queue.push(u); }
-    }
-    sendCrawlProgress();
-    // Capture page (content.js will trigger a ZIP download and we mark done afterward)
-    S.pageDoneResolvers.set(tabId, () => {});
-    const injected = await captureTabToZipOrMHTMLElse(tabId, nextUrl);
-    if (!injected) {
-      // Mark as done even if failed to inject and save
-      markCrawlPageDone(tabId);
-    } else {
-      // Wait until markCrawlPageDone is called by the download handler
-      await new Promise((resolve) => {
-        S.pageDoneResolvers.set(tabId, resolve);
-        // Failsafe timeout
-        setTimeout(() => { try { resolve(); } catch {}; }, 60000);
-      });
-    }
-  } catch (e) {
-    console.error('Crawl error for URL', e);
-  } finally {
-    S.active = false;
-    if (S.running) setTimeout(() => { try { crawlPump(); } catch (e) { console.error(e); } }, 0);
+        // Open inactive tab and wait load
+        const tab = await chrome.tabs.create({ url: nextUrl, active: false });
+        tabId = tab.id;
+        // Track ownership
+        S.pageByTabId.set(tabId, { url: nextUrl });
+        await waitTabComplete(tabId, 15000);
+        // Extract links for BFS
+        const links = await extractLinks(tabId, nextUrl);
+        // Scope to same-host as the start URL to avoid crawling the entire web
+        let startHost = '';
+        try { startHost = new URL(S.startUrl).hostname || ''; } catch {}
+        for (const u of links) {
+          let ok = false;
+          try {
+            const uh = new URL(u).hostname || '';
+            ok = (uh === startHost); // same host only
+          } catch { ok = false; }
+          if (!ok) continue;
+          if (!S.visited.has(u) && !S.seen.has(u)) { S.seen.add(u); S.queue.push(u); }
+        }
+        sendCrawlProgress();
+        // Capture page (content.js will trigger a ZIP download and we mark done afterward)
+        S.pageDoneResolvers.set(tabId, () => {});
+        const injected = await captureTabToZipOrMHTMLElse(tabId, nextUrl);
+        if (!injected) {
+          // Mark as done even if failed to inject and save
+          markCrawlPageDone(tabId);
+        } else {
+          // Wait until markCrawlPageDone is called by the download handler
+          await new Promise((resolve) => {
+            S.pageDoneResolvers.set(tabId, resolve);
+            // Failsafe timeout
+            setTimeout(() => { try { resolve(); } catch {}; }, 20000);
+          });
+        }
+      } catch (e) {
+        console.error('Crawl error for URL', nextUrl, e);
+        if (tabId && S.pageByTabId.has(tabId)) markCrawlPageDone(tabId);
+      }
+    })();
+  }
+
+  sendCrawlProgress();
+  // Continue pumping if still running
+  if (S.running && (S.queue.length > 0 || S.pageByTabId.size > 0)) {
+    setTimeout(() => { try { crawlPump(); } catch (e) { console.error(e); } }, 500);
   }
 }
 
@@ -527,23 +549,31 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       }
       const startUrl = msg.startUrl || (await chrome.tabs.get(msg.startTabId).catch(()=>({url:''}))).url || '';
       if (!startUrl) { chrome.runtime.sendMessage({ type:'GETINSPIRE_ERROR', error: 'No start URL' }); return; }
+      // Normalize start URL for consistent deduplication
+      const normalizedStartUrl = (() => {
+        try {
+          const u = new URL(startUrl);
+          u.hash = '';
+          return u.href;
+        } catch { return startUrl; }
+      })();
+
       __crawlSession = {
         running: true,
         stopped: false,
-        active: false,
-        queue: [startUrl],
+        queue: [normalizedStartUrl],
         visited: new Set(),
-        seen: new Set([startUrl]),
+        seen: new Set([normalizedStartUrl]),
         pageByTabId: new Map(),
         pageDoneResolvers: new Map(),
         doneCount: 0,
-        // Softer defaults to avoid excessively long crawls
-        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 60,
-        // Global time cap (ms) for the whole crawl
-        maxMillis: Number.isFinite(msg.maxMillis) ? msg.maxMillis : 10 * 60 * 1000,
+        // Optimized for faster crawls
+        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 100,
+        // Global time cap (ms) for the whole crawl - 1 minute max
+        maxMillis: Number.isFinite(msg.maxMillis) ? msg.maxMillis : 60 * 1000,
         startTabId: msg.startTabId || null,
         aggTabId: null,
-        startUrl,
+        startUrl: normalizedStartUrl,
         startedAt: Date.now(),
       };
       // Open a dedicated aggregator host page (stable even if user navigates)
@@ -551,7 +581,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         const aggUrl = chrome.runtime.getURL('src/aggregator.html');
         const aggTab = await chrome.tabs.create({ url: aggUrl, active: false });
         __crawlSession.aggTabId = aggTab.id;
-        await waitTabComplete(__crawlSession.aggTabId, 20000).catch(()=>{});
+        await waitTabComplete(__crawlSession.aggTabId, 10000).catch(()=>{});
         await chrome.runtime.sendMessage({ type: 'GETINSPIRE_AGG_INIT', title: `GetInspire Site Snapshot: ${new URL(startUrl).hostname}` }).catch(()=>{});
       } catch (e) { console.error('Aggregator host failed', e); }
       sendCrawlProgress();

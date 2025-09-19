@@ -1,11 +1,11 @@
 export const defaults = {
-  maxMillis: 90_000,
-  maxAssets: 2500,
-  maxZipMB: 750,
-  concurrency: 8,
-  requestTimeoutMs: 20_000,
-  scrollIdleMs: 2_000,
-  maxScrollIterations: 200,
+  maxMillis: 60_000,
+  maxAssets: 5000,
+  maxZipMB: 1000,
+  concurrency: 20,
+  requestTimeoutMs: 10_000,
+  scrollIdleMs: 1_000,
+  maxScrollIterations: 50,
   // Redaction replaces matched text with lorem-ipsum in the saved HTML.
   // Default to false to avoid surprising users with "text junk" captures.
   redact: false,
