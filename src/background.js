@@ -3,6 +3,42 @@ const __grantedOrigins = new Set();
 // Asset cache to avoid refetching the same resources (15 minute TTL)
 const __assetCache = new Map();
 
+// Import fetch-based crawler for memory-efficient crawling
+import { FetchCrawler } from './fetch-crawler.js';
+
+// Memory monitoring
+let __memoryMonitor = null;
+
+async function checkMemoryUsage() {
+  try {
+    if ('memory' in performance) {
+      const memInfo = performance.memory;
+      const usedMB = memInfo.usedJSHeapSize / (1024 * 1024);
+      const limitMB = memInfo.jsHeapSizeLimit / (1024 * 1024);
+      const percentUsed = (usedMB / limitMB) * 100;
+
+      console.log(`[Memory] Used: ${usedMB.toFixed(1)}MB / ${limitMB.toFixed(1)}MB (${percentUsed.toFixed(1)}%)`);
+
+      return { usedMB, limitMB, percentUsed };
+    }
+  } catch (e) {
+    console.warn('[Memory] Cannot check memory usage:', e);
+  }
+  return null;
+}
+
+function startMemoryMonitoring() {
+  if (__memoryMonitor) return;
+  __memoryMonitor = setInterval(checkMemoryUsage, 5000); // Check every 5 seconds
+}
+
+function stopMemoryMonitoring() {
+  if (__memoryMonitor) {
+    clearInterval(__memoryMonitor);
+    __memoryMonitor = null;
+  }
+}
+
 async function ensureHostPermissionFor(urlStr, sameOrigin) {
   try {
     if (sameOrigin) return true; // No extra permission needed
@@ -155,7 +191,21 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         blobUrl = URLRef.createObjectURL(blob);
       }
       if (!blobUrl) throw new Error('No blobUrl provided for download');
-      const { getinspireOptions } = await chrome.storage.sync.get('getinspireOptions');
+      // Handle incognito mode - fallback to local storage if sync fails
+      let getinspireOptions;
+      try {
+        const result = await chrome.storage.sync.get('getinspireOptions');
+        getinspireOptions = result.getinspireOptions;
+      } catch (e) {
+        console.warn('[Incognito] Sync storage failed, using local storage:', e);
+        try {
+          const result = await chrome.storage.local.get('getinspireOptions');
+          getinspireOptions = result.getinspireOptions;
+        } catch (e2) {
+          console.warn('[Incognito] Local storage also failed, using defaults:', e2);
+          getinspireOptions = {};
+        }
+      }
       const saveWithoutPrompt = Boolean(getinspireOptions?.saveWithoutPrompt);
       await chrome.downloads.download({
         url: blobUrl,
@@ -454,77 +504,209 @@ function markCrawlPageDone(tabId) {
 async function crawlPump() {
   const S = __crawlSession;
   if (!S || S.stopped) return finishCrawl('stopped');
-  // Global time cap for crawl session
+
+  // Check memory usage and switch to fetch-only mode if needed
+  const memInfo = await checkMemoryUsage();
+  if (memInfo && memInfo.usedMB > S.memoryLimit) {
+    console.warn(`[Memory] Usage ${memInfo.usedMB.toFixed(1)}MB exceeds limit ${S.memoryLimit}MB, switching to fetch-only mode`);
+    return await crawlWithFetchMode();
+  }
+
+  // Check time limit
   try {
     if (S.startedAt && S.maxMillis && (Date.now() - S.startedAt > S.maxMillis)) {
       return finishCrawl('timeout');
     }
   } catch {}
+
   if (S.doneCount >= S.maxPages) return finishCrawl('limit');
-  if (S.queue.length === 0 && S.pageByTabId.size === 0) return finishCrawl('done');
+  if (S.queue.length === 0) return finishCrawl('done');
+  if (S.processing) return; // Already processing
 
-  // Limit to 2 concurrent pages to prevent memory overload
-  const maxConcurrent = 2;
-  while (S.pageByTabId.size < maxConcurrent && S.queue.length > 0 && S.doneCount < S.maxPages) {
-    const nextUrl = S.queue.shift();
-    if (!nextUrl || S.visited.has(nextUrl)) continue;
-    S.visited.add(nextUrl);
-
-    // Process page asynchronously without blocking
-    (async () => {
-      let tabId;
-      try {
-        // Open tab in background (completely hidden)
-        const tab = await chrome.tabs.create({
-          url: nextUrl,
-          active: false,
-          pinned: true,  // Minimize resource usage
-          index: 999  // Place at end
-        });
-        tabId = tab.id;
-        // Track ownership
-        S.pageByTabId.set(tabId, { url: nextUrl });
-        await waitTabComplete(tabId, 15000);
-        // Extract links for BFS
-        const links = await extractLinks(tabId, nextUrl);
-        // Scope to same-host as the start URL to avoid crawling the entire web
-        let startHost = '';
-        try { startHost = new URL(S.startUrl).hostname || ''; } catch {}
-        for (const u of links) {
-          let ok = false;
-          try {
-            const uh = new URL(u).hostname || '';
-            ok = (uh === startHost); // same host only
-          } catch { ok = false; }
-          if (!ok) continue;
-          if (!S.visited.has(u) && !S.seen.has(u)) { S.seen.add(u); S.queue.push(u); }
-        }
-        sendCrawlProgress();
-        // Capture page (content.js will trigger a ZIP download and we mark done afterward)
-        S.pageDoneResolvers.set(tabId, () => {});
-        const injected = await captureTabToZipOrMHTMLElse(tabId, nextUrl);
-        if (!injected) {
-          // Mark as done even if failed to inject and save
-          markCrawlPageDone(tabId);
-        } else {
-          // Wait until markCrawlPageDone is called by the download handler
-          await new Promise((resolve) => {
-            S.pageDoneResolvers.set(tabId, resolve);
-            // Failsafe timeout
-            setTimeout(() => { try { resolve(); } catch {}; }, 20000);
-          });
-        }
-      } catch (e) {
-        console.error('Crawl error for URL', nextUrl, e);
-        if (tabId && S.pageByTabId.has(tabId)) markCrawlPageDone(tabId);
-      }
-    })();
+  const nextUrl = S.queue.shift();
+  if (!nextUrl || S.visited.has(nextUrl)) {
+    setTimeout(() => crawlPump(), 100);
+    return;
   }
 
+  S.visited.add(nextUrl);
+  S.processing = true;
   sendCrawlProgress();
-  // Continue pumping if still running
-  if (S.running && (S.queue.length > 0 || S.pageByTabId.size > 0)) {
-    setTimeout(() => { try { crawlPump(); } catch (e) { console.error(e); } }, 500);
+
+  try {
+    // Determine crawl mode: 'smart', 'single-tab', 'fetch-only'
+    if (S.crawlMode === 'fetch-only') {
+      return await processFetchOnlyPage(nextUrl);
+    }
+
+    // SINGLE TAB APPROACH - Reuse the crawl tab
+    let tabId = S.crawlTabId;
+
+    if (!tabId) {
+      // Create single reusable tab for crawling
+      const tab = await chrome.tabs.create({
+        url: nextUrl,
+        active: false,
+        pinned: true
+      });
+      tabId = S.crawlTabId = tab.id;
+    } else {
+      // Navigate existing tab to new URL
+      await chrome.tabs.update(tabId, { url: nextUrl });
+    }
+
+    // Wait for page to load
+    await waitTabComplete(tabId, 15000);
+
+    // Small delay for dynamic content
+    await new Promise(r => setTimeout(r, 1000));
+
+    // Extract links
+    const links = await extractLinks(tabId, nextUrl);
+    let startHost = '';
+    try { startHost = new URL(S.startUrl).hostname || ''; } catch {}
+
+    for (const u of links) {
+      try {
+        const uh = new URL(u).hostname || '';
+        if (uh === startHost && !S.visited.has(u) && !S.seen.has(u)) {
+          S.seen.add(u);
+          S.queue.push(u);
+        }
+      } catch {}
+    }
+
+    // Inject and capture
+    const injected = await captureTabToZipOrMHTMLElse(tabId, nextUrl);
+
+    // Wait for capture to complete
+    await new Promise(resolve => {
+      S.pageDoneResolvers.set(tabId, resolve);
+      setTimeout(resolve, 10000); // Max 10s wait
+    });
+
+    S.doneCount++;
+    sendCrawlProgress();
+
+  } catch (e) {
+    console.error('Crawl error for URL:', nextUrl, e);
+    S.doneCount++;
+  } finally {
+    S.processing = false;
+    S.pageDoneResolvers.clear();
+
+    // Continue with next page
+    if (S.running) {
+      setTimeout(() => crawlPump(), 500);
+    }
+  }
+}
+
+// Fetch-only mode for memory-efficient crawling
+async function crawlWithFetchMode() {
+  const S = __crawlSession;
+  console.log('[FetchCrawler] Switching to fetch-only mode due to memory constraints');
+
+  try {
+    // Use FetchCrawler for remaining URLs
+    const remainingUrls = [S.startUrl, ...S.queue];
+    const fetchCrawler = new FetchCrawler({
+      maxPages: S.maxPages - S.doneCount,
+      maxTime: S.maxMillis - (Date.now() - S.startedAt),
+      userAgent: 'GetInspire Crawler (Memory-Safe Mode)'
+    });
+
+    const results = await fetchCrawler.crawl(S.startUrl);
+
+    // Convert to aggregator format and send to aggregator tab
+    const aggResults = fetchCrawler.toAggregatorFormat();
+
+    for (const result of aggResults) {
+      if (S.aggTabId) {
+        await chrome.tabs.sendMessage(S.aggTabId, {
+          type: 'GETINSPIRE_AGG_ADD_PAGE',
+          slug: result.slug,
+          package: result
+        }).catch(e => console.warn('[FetchCrawler] Failed to send to aggregator:', e));
+      }
+      S.doneCount++;
+      sendCrawlProgress();
+    }
+
+    return finishCrawl('fetch-complete');
+  } catch (e) {
+    console.error('[FetchCrawler] Error in fetch mode:', e);
+    return finishCrawl('fetch-error');
+  }
+}
+
+// Process single page in fetch-only mode
+async function processFetchOnlyPage(url) {
+  const S = __crawlSession;
+
+  try {
+    const fetchCrawler = new FetchCrawler({
+      maxPages: 1,
+      maxTime: 10000,
+      userAgent: 'GetInspire Crawler (Fetch Mode)'
+    });
+
+    const result = await fetchCrawler.fetchPage(url);
+
+    if (result && S.aggTabId) {
+      const aggResult = {
+        slug: fetchCrawler.urlToSlug(url),
+        pageUrl: url,
+        title: result.title,
+        indexHtml: fetchCrawler.cleanHtml(result.html),
+        assets: [],
+        reportJson: JSON.stringify({
+          url: result.url,
+          title: result.title,
+          size: result.size,
+          method: 'fetch-only',
+          timestamp: result.timestamp
+        }),
+        readmeMd: `# ${result.title}\n\nFetched from: ${url}\nSize: ${result.size} bytes\nMethod: Fetch-only (no assets)`,
+        quickCheckHtml: `<!DOCTYPE html><html><head><title>Quick Check</title></head><body><h1>${result.title}</h1><p>URL: <a href="${url}">${url}</a></p><p>Method: Fetch-only</p></body></html>`,
+        extras: []
+      };
+
+      await chrome.tabs.sendMessage(S.aggTabId, {
+        type: 'GETINSPIRE_AGG_ADD_PAGE',
+        slug: aggResult.slug,
+        package: aggResult
+      }).catch(e => console.warn('[FetchCrawler] Failed to send to aggregator:', e));
+
+      // Extract links from HTML for crawling
+      const links = fetchCrawler.extractLinks(result.html, url);
+      let startHost = '';
+      try { startHost = new URL(S.startUrl).hostname || ''; } catch {}
+
+      for (const u of links) {
+        try {
+          const uh = new URL(u).hostname || '';
+          if (uh === startHost && !S.visited.has(u) && !S.seen.has(u)) {
+            S.seen.add(u);
+            S.queue.push(u);
+          }
+        } catch {}
+      }
+    }
+
+    S.doneCount++;
+    sendCrawlProgress();
+
+  } catch (e) {
+    console.error('[FetchCrawler] Error processing page:', url, e);
+    S.doneCount++;
+  } finally {
+    S.processing = false;
+
+    // Continue with next page
+    if (S.running) {
+      setTimeout(() => crawlPump(), 200);
+    }
   }
 }
 
@@ -534,10 +716,13 @@ function finishCrawl(reason) {
     __crawlSession.running = false;
     const done = __crawlSession.doneCount;
 
-    // Close any remaining crawl tabs
+    // Stop memory monitoring
+    stopMemoryMonitoring();
+
+    // Close the single crawl tab
     try {
-      for (const tabId of __crawlSession.pageByTabId.keys()) {
-        chrome.tabs.remove(tabId).catch(()=>{});
+      if (__crawlSession.crawlTabId) {
+        chrome.tabs.remove(__crawlSession.crawlTabId).catch(()=>{});
       }
     } catch {}
 
@@ -581,24 +766,50 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         } catch { return startUrl; }
       })();
 
+      // Get crawl mode and memory limit from options (incognito-safe)
+      let getinspireOptions;
+      try {
+        const result = await chrome.storage.sync.get('getinspireOptions');
+        getinspireOptions = result.getinspireOptions;
+      } catch (e) {
+        console.warn('[Incognito] Sync storage failed for crawl options, using local storage:', e);
+        try {
+          const result = await chrome.storage.local.get('getinspireOptions');
+          getinspireOptions = result.getinspireOptions;
+        } catch (e2) {
+          console.warn('[Incognito] Local storage also failed for crawl options, using defaults:', e2);
+          getinspireOptions = {};
+        }
+      }
+      const crawlMode = getinspireOptions?.crawlMode || 'smart';
+      const memoryLimit = getinspireOptions?.memoryLimit || 500; // MB
+
       __crawlSession = {
         running: true,
         stopped: false,
+        processing: false, // Track if currently processing a page
         queue: [normalizedStartUrl],
         visited: new Set(),
         seen: new Set([normalizedStartUrl]),
-        pageByTabId: new Map(),
         pageDoneResolvers: new Map(),
         doneCount: 0,
-        // Balanced for memory and speed
-        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 50,
-        // Global time cap (ms) for the whole crawl - 2 minutes max
-        maxMillis: Number.isFinite(msg.maxMillis) ? msg.maxMillis : 120 * 1000,
+        // Memory-safe limits
+        maxPages: Number.isFinite(msg.maxPages) ? msg.maxPages : 25,
+        // Shorter time limit - 1 minute max
+        maxMillis: Number.isFinite(msg.maxMillis) ? msg.maxMillis : 60 * 1000,
         startTabId: msg.startTabId || null,
         aggTabId: null,
+        crawlTabId: null, // Single reusable tab for crawling
         startUrl: normalizedStartUrl,
         startedAt: Date.now(),
+        crawlMode, // 'smart', 'single-tab', 'fetch-only'
+        memoryLimit, // Memory limit in MB
       };
+
+      // Start memory monitoring
+      startMemoryMonitoring();
+      console.log(`[Crawl] Starting with mode: ${crawlMode}, memory limit: ${memoryLimit}MB`);
+
       // Open a dedicated aggregator host page (stable even if user navigates)
       try {
         const aggUrl = chrome.runtime.getURL('src/aggregator.html');

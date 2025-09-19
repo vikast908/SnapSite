@@ -75,6 +75,15 @@ async function runCapture() {
   resetProgress();
   stopBtn.disabled = false;
   startedAt = Date.now(); lastDone = 0; lastTotal = 0;
+
+  // Simple timeout to reset UI if stuck (stored globally for message handlers)
+  window.captureTimeout = setTimeout(() => {
+    setStatus('Timed out. Please try again.');
+    stopBtn.disabled = true;
+    resetProgress();
+    window.captureTimeout = null;
+  }, 25000);
+
   try {
     await chrome.scripting.executeScript({
       target: { tabId: currentTabId },
@@ -152,6 +161,10 @@ chrome.runtime.onMessage.addListener((msg) => {
     setStatus('Downloaded ZIP.');
     stopBtn.disabled = true;
     setProgress(msg.total || 1, msg.total || 1);
+    if (window.captureTimeout) {
+      clearTimeout(window.captureTimeout);
+      window.captureTimeout = null;
+    }
   }
   if (msg.type === 'GETINSPIRE_ERROR') {
     // In crawl mode, show error but stay in crawl state.
@@ -159,6 +172,10 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (captureMode !== 'crawl') {
       stopBtn.disabled = true;
       resetProgress();
+      if (window.captureTimeout) {
+        clearTimeout(window.captureTimeout);
+        window.captureTimeout = null;
+      }
     }
   }
   // Crawl progress updates

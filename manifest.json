@@ -9,6 +9,7 @@
   "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "src/background.js", "type": "module" },
   "options_page": "src/options.html",
+  "incognito": "spanning",
   "web_accessible_resources": [
     {
       "resources": [
