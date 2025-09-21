@@ -1,39 +1,25 @@
 {
   "manifest_version": 3,
   "name": "GetInspire",
-  "version": "0.1.1",
-  "description": "Snapshot any finite web page into a local ZIP (index.html + assets). Detects endless pages and stops.",
-  "action": { "default_popup": "src/popup.html", "default_title": "GetInspire" },
-  "permissions": ["activeTab", "tabs", "scripting", "downloads", "storage", "contextMenus", "pageCapture", "declarativeNetRequest", "declarativeNetRequestWithHostAccess"],
-  "host_permissions": ["<all_urls>"],
-  "optional_host_permissions": ["<all_urls>"],
-  "background": { "service_worker": "src/background.js", "type": "module" },
-  "options_page": "src/options.html",
-  "incognito": "spanning",
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "src/defaults.js",
-        "src/ux-patterns.js",
-        "src/ux-patterns-extended.js"
-      ],
-      "matches": ["<all_urls>"]
-    }
+  "version": "0.1.0",
+  "description": "Save web pages as ZIP files",
+
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage"
   ],
-  "commands": {
-    "capture-page": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+S"
-      },
-      "description": "GetInspire: Capture this page"
-    },
-    "stop-capture": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+X"
-      },
-      "description": "GetInspire: Stop capture"
-    }
+
+  "background": {
+    "service_worker": "src/background.js"
   },
+
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "GetInspire"
+  },
+
   "icons": {
     "16": "assets/icons/16.png",
     "32": "assets/icons/32.png",

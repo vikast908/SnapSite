@@ -1,104 +1,68 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>GetInspire</title>
-    <link rel="stylesheet" href="ui.css" />
-    <style>
-      /* Popup sizing and layout that complement shared styles */
-      body.gi{
-        margin: 0; padding: 12px; min-width: 320px; max-width: 380px;
-      }
-      .gi, .gi * { box-sizing: border-box; }
-      .gi h3{ margin: 0; font-weight: 700; letter-spacing:.2px; }
-      .gi .gi-top{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-      .gi .gi-top .title{ flex:1; display:flex; align-items:center; gap:8px; }
-      .gi .brand .logo{ width:22px; height:22px; color: currentColor; display:block; }
-      .gi .brand span{ font-weight:700; letter-spacing:.2px; }
-    </style>
-  </head>
-  <body class="gi">
-    <div class="gi-top panel">
-      <h3 class="title brand">
-        <svg class="logo brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <!-- bulb outline -->
-          <path d="M12 3a7 7 0 0 0-5 11c.9 1.1 1.5 1.9 1.7 3 .1.7.7 1 1.3 1h3c.6 0 1.2-.3 1.3-1 .2-1.1.8-1.9 1.7-3A7 7 0 0 0 12 3z"/>
-          <!-- bulb base -->
-          <path d="M9.5 19.5h5M10 22h4"/>
-          <!-- leaf inside -->
-          <path d="M12 8c2.8 0 4.8 1 4.8 1s-1.3 5.2-5.3 5.2c-1.1 0-1.9-.3-2.5-.8 0-3.2 1.4-5.4 3-5.4z" fill="currentColor" stroke="none"/>
-          <!-- rays -->
-          <path d="M16.8 5.2l.9-1.5M18.9 7.4l1.6-.6M7.2 5.2l-.9-1.5"/>
-        </svg>
-        <span>GetInspire</span>
-      </h3>
-      <a href="#" id="openOptionsLink" class="icon-btn" title="Options" aria-label="Options">
-        <!-- gear icon -->
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09c-.67 0-1.27.39-1.51 1z"/>
-        </svg>
-      </a>
-      <a href="#" id="themeToggle" class="icon-btn" title="Theme: Auto" aria-label="Toggle theme">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="5"/>
-        </svg>
-      </a>
-      <a href="#" id="reportLink" class="icon-btn" title="Report issue" aria-label="Report issue">
-        <!-- bug icon -->
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M8 9a4 4 0 1 1 8 0"/>
-          <path d="M3 13h18"/>
-          <path d="M5 7l2 2"/>
-          <path d="M19 7l-2 2"/>
-          <rect x="8" y="9" width="8" height="11" rx="4"/>
-        </svg>
-      </a>
-    </div>
-    <!-- Segmented capture mode + Stop -->
-    <div class="row" style="display:flex; align-items:center; gap:8px;">
-      <div class="segmented" role="tablist" aria-label="Capture mode">
-        <button id="startBtn" class="btn selected" aria-pressed="true" role="tab" aria-selected="true" title="Capture this page">
-          <!-- single page/tab icon -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="6" width="18" height="14" rx="2"/>
-            <path d="M3 10h18"/>
-          </svg>
-          <span>This page</span>
-        </button>
-        <button id="allBtn" class="btn" aria-pressed="false" role="tab" aria-selected="false" title="Crawl this site (same host)">
-          <!-- list/pages icon -->
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="5" width="18" height="14" rx="2"/>
-            <path d="M7 9h10"/>
-            <path d="M7 13h7"/>
-          </svg>
-          <span>All pages</span>
-        </button>
-      </div>
-      <button id="stopBtn" class="btn btn-danger" disabled title="Stop">
-        <!-- stop-circle with filled square -->
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/>
-          <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/>
-        </svg>
-      </button>
-    </div>
-    <div class="panel">
-      <div class="status" id="status">ready to start?</div>
-      <div class="row" style="display:flex; align-items:center; gap:8px;">
-        <div class="progress" style="flex:1">
-          <div id="bar" class="bar"></div>
-        </div>
-        <div class="pct" id="pct" style="min-width:32px; text-align:right; font-variant-numeric: tabular-nums;">0%</div>
-      </div>
-    </div>
-    <div class="meta" id="meta" aria-live="polite" style="margin-top:6px;">
-      <span id="countMeta">0/0</span>
-      <span id="elapsedMeta">0s</span>
-    </div>
-    <small id="hint" style="color:var(--ui-subtle); display:block; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Scan -> Scroll -> Collect -> Rewrite -> Zip -> Download</small>
-    <script src="theme.js"></script>
-    <script src="popup.js"></script>
-  </body>
-  </html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0 0 20px 0;
+      color: #333;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .error {
+      color: #d32f2f;
+      background: #ffebee;
+    }
+
+    .success {
+      color: #388e3c;
+      background: #e8f5e9;
+    }
+  </style>
+</head>
+<body>
+  <h1>GetInspire - Web Capture</h1>
+
+  <button id="captureBtn">Capture This Page</button>
+
+  <div id="status">Ready to capture</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
