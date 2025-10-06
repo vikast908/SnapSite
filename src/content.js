@@ -36,42 +36,6 @@
         '.flickity-slider', '.splide', '.keen-slider',
         '.swiper-wrapper', '.carousel-wrapper'
       ];
-      document.querySelectorAll('img, source').forEach(el => {
-        convertAttrs(el, pairs);
-        if (el.tagName === 'IMG') { try { el.loading = 'eager'; el.decoding = 'sync'; } catch {} }
-      });
-      if (includeVideo) {
-        document.querySelectorAll('video, audio, source').forEach(el => convertAttrs(el, pairs));
-        document.querySelectorAll('video').forEach(v => { try { v.preload = 'metadata'; } catch {} });
-      }
-      // Wait briefly for image decodes
-      const pending = Array.from(document.images).filter(im => im.src && !im.complete).slice(0, 200);
-      await Promise.race([
-        Promise.allSettled(pending.map(im => im.decode ? im.decode().catch(()=>{}) : new Promise(r=>{ im.addEventListener('load',r,{once:true}); im.addEventListener('error',r,{once:true}); setTimeout(r,1500);}))),
-        new Promise(r => setTimeout(r, 2500))
-      ]);
-      // Loosen obvious carousels so slides aren't cropped, but preserve transforms
-      // to maintain carousel positioning and animations.
-      const isYouTubeDomain = /(^|\.)youtube\.com$/i.test(location.hostname||'');
-      const carSel = '[class*="carousel"], [class*="slider"], [class*="slick"], [class*="swiper"], [data-carousel]';
-      document.querySelectorAll(carSel).forEach(c => {
-        try {
-          const cs = getComputedStyle(c);
-          // Only expand overflow if carousel is a direct wrapper with hidden overflow
-          // Check if it's likely a carousel container (has multiple children)
-          const childCount = c.children.length;
-          if (childCount > 1 && (cs.overflowX === 'hidden' || /hidden|clip/.test(cs.overflow))) {
-            // Instead of making overflow visible (breaks layout), try overflow-x auto
-            c.style.overflowX = 'auto';
-            c.style.scrollBehavior = 'smooth';
-          }
-          // Preserve transforms entirely - they're essential for carousel positioning
-          // Removing transforms breaks translateX-based slide positioning
-        } catch {}
-      });
-      // Global transform stripping removed (caused giant icons on some sites).
-    } catch (e) { console.error(e); }
-  }
 
       let expandedCount = 0;
       const processedCarousels = new Set();
