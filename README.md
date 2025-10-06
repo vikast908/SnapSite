@@ -13,6 +13,16 @@ Use
 - Save the ZIP, unzip it, open `quick-check.html` for a fast sanity check, then `index.html`
   - Quick Check embeds the report inline, so it works even when the browser blocks `fetch()` on `file://` URLs.
 
+All Pages (Site Crawl)
+- Use the popup’s "All pages" button to crawl the current site (same host only) and aggregate multiple pages into one ZIP.
+- Safety caps: defaults to max ~60 pages and ~10 minutes per crawl. You can stop anytime from the popup.
+- Scope: only links on the same host are enqueued; external links are skipped to avoid unbounded crawls.
+ - Runs headless: crawl continues even if you close the popup or switch tabs. The extension badge shows progress; a small in‑page overlay appears on crawled pages with a Stop button.
+
+Theme
+- Choose Light, Dark, or Auto (system) theme.
+- Change it in Options (Theme section) or from the popup header via the Theme button.
+
 What's Included
 - `index.html`: DOM snapshot with local asset paths
 - `assets/`: downloaded CSS/JS/images/fonts/media
@@ -28,6 +38,7 @@ Endless Pages & Limits
 
 Settings
 - Options page lets you adjust caps, redact behavior, denylist, and whether to save without prompt
+  - Theme: Light, Dark, or Auto (system)
   - Defaults are shared across the extension; the Options page imports them from `src/defaults.js`.
   - Strip Scripts: optionally remove scripts and inline handlers for offline safety.
   - Redaction: off by default to avoid altering captured text. Enable "Redact authenticated text" in Options if you want sensitive text (emails/tokens/user areas) replaced in the saved HTML.
@@ -40,32 +51,20 @@ Notes
 - Third-party iframes stay external by design and may not work offline
 - Cross-origin assets can be blocked by CORS/CSP; failures are listed in the report
 - The popup shows live progress during capture
+- For crawls, the progress shows completed/queued pages and ETA; final ZIP downloads automatically unless you’ve disabled "Save without prompt" in Options.
 - In-page overlay shows status with a Stop button during capture
 
----
-
-New: Video Downloader
-
-- Click the download icon in the popup header to detect the currently playing/visible video on the page.
-- A quality menu appears. Click a quality to start the download in the background.
-- Supported: direct files (MP4/WebM/Ogg) and non-encrypted HLS (.m3u8) streams. Progress shows in the popup bar for HLS.
-- Permissions: for some hosts, Chrome prompts for per-origin access the first time. Accept the prompt to proceed.
-- Not supported: DRM/Widevine, encrypted HLS (SAMPLE-AES/AES-128), and ciphered/MSE-only streams many sites use (including many YouTube/course videos). These won't expose downloadable URLs in-page.
-
 Popup UI Updates
-
-- Top right actions: [Settings] [Report issue].
-- Progress line shows percentage, counts, and elapsed time during captures and HLS downloads.
+- Top right actions: [Settings] [Theme] [Report issue].
+- Progress line shows percentage, counts, and elapsed time during captures.
 - Settings opens in a small popup window (not a browser tab) with all options from `src/options.html`.
 
 Options Enhancements
-
 - Added toggles: "Show overlay" and "Font fallback" alongside existing settings.
 - Denylist presets: quick buttons to insert common social/search patterns (then click Save).
-- "Save without prompt": if enabled, ZIP and video downloads won't ask for a filename.
+- "Save without prompt": if enabled, ZIP downloads won't ask for a filename.
 
 Icons & Branding
-
 - Updated logo and toolbar icons.
 - Source SVG: `assets/logo.svg`.
 - Generated PNGs: `assets/icons/16.png`, `32.png`, `48.png`, `128.png`.
@@ -75,16 +74,6 @@ Icons & Branding
   npm install
   node tools/build-icons.js
   ```
-
-Troubleshooting Video Downloads
-
-- Permission denied for video host: click the quality again and accept Chrome’s permission prompt. The prompt must be accepted under your click.
-- No downloadable video found on YouTube: many videos are protected via MSE/DRM; the extension cannot extract those in-page.
-- Encrypted HLS message: the stream uses encryption (e.g., SAMPLE-AES). Decryption is out of scope for the in-extension downloader.
-
-Roadmap (Optional)
-
-- DASH (MPD) parsing support for broader site coverage.
 
 Architecture Overview
 
@@ -184,4 +173,3 @@ Developer Notes
 - Testing tips:
   - Use the Quick Check page in the ZIP for a fast sanity pass.
   - Inspect `report/README.md` and `report/asset-manifest.json` for coverage and failures.
-

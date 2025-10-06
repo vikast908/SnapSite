@@ -1,52 +1,35 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>GetInspire</title>
-    <style>
-      /* Scope everything under .gi to prevent host-page CSS collisions */
-      .gi{
-        /* Design tokens */
-        --gi-bg: rgba(255,255,255,0.55);
-        --gi-stroke: rgba(255,255,255,0.35);
-        --gi-text: #0f172a;
-        --gi-subtle: #334155;
-        --gi-accent: #3b82f6;
-        --gi-shadow: 0 8px 26px rgba(2,6,23,0.18);
-      }
-      @media (prefers-color-scheme: dark){
-        .gi{
-          --gi-bg: rgba(15,23,42,0.45);
-          --gi-stroke: rgba(255,255,255,0.12);
-          --gi-text: #e5e7eb;
-          --gi-subtle: #94a3b8;
-          --gi-accent: #60a5fa;
-          --gi-shadow: 0 8px 30px rgba(0,0,0,0.45);
-        }
-      }
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+    }
 
-      /* Layout container — keep a sensible popup width */
-      body.gi{
-        font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-        margin: 0; padding: 12px;
-        color: var(--gi-text);
-        /* Restore stable popup sizing so rows don’t collapse */
-        min-width: 320px; /* Chrome popups follow document min-width */
-        max-width: 360px;
-        background: var(--gi-bg);
-        backdrop-filter: blur(14px) saturate(140%);
-        -webkit-backdrop-filter: blur(14px) saturate(140%);
-        border-radius: 16px;
-        border: 1px solid var(--gi-stroke);
-        box-shadow: var(--gi-shadow);
-        overflow: hidden;
-      }
+    h1 {
+      font-size: 18px;
+      margin: 0 0 20px 0;
+      color: #333;
+    }
 
-      /* Keep sizing stable inside the component */
-      .gi, .gi * { box-sizing: border-box; }
+    button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
 
-      .gi h3{ margin: 0; font-weight: 700; letter-spacing:.2px; }
-
+    button:hover {
+      background: #45a049;
+ 
       /* Top bar with actions on the right */
       .gi .gi-top{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
       .gi .gi-top .title{ flex:1; display:flex; align-items:center; gap:8px; }
@@ -62,19 +45,23 @@
       .gi .icon-btn:hover{ box-shadow: 0 2px 10px rgba(2,6,23,.15), inset 0 1px 0 rgba(255,255,255,.25); }
       .gi .icon-btn:active{ transform: translateY(1px); }
       .gi .icon-btn svg{ width:16px; height:16px; display:block; }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-size: 14px;
+      text-align: center;
+    }
 
-      /* Floating panel for video quality selection */
-      .gi .panel{ position: relative; }
-      .gi .video-panel{ position:absolute; right:0; top:36px; z-index:10; display:none; min-width:220px;
-        background: rgba(255,255,255,0.9); border:1px solid var(--gi-stroke); border-radius:12px; box-shadow: var(--gi-shadow); padding:8px; backdrop-filter: blur(8px); }
-      @media (prefers-color-scheme: dark){ .gi .video-panel{ background: rgba(15,23,42,0.85); } }
-      .gi .video-panel.open{ display:block; }
-      .gi .video-list{ display:flex; flex-direction:column; gap:6px; margin-top:6px; }
-      .gi .video-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
-      .gi .video-item button{ padding:6px 10px; border-radius:8px; }
-
-      .gi .gi-row{ margin: 6px 0; display:flex; gap:10px; align-items:center; flex-wrap: nowrap; }
-
+    .error {
+      color: #d32f2f;
+      background: #ffebee;
+    }
       .gi button{
         appearance: none; border:1px solid var(--gi-stroke); border-radius: 10px;
         padding: 9px 14px; cursor: pointer; background: rgba(255,255,255,0.35);
@@ -95,10 +82,16 @@
       }
       .gi #startBtn:hover{ box-shadow: 0 6px 18px rgba(59,130,246,.25); }
       .gi #stopBtn[disabled]{ opacity:.55; cursor:not-allowed; }
+    .success {
+      color: #388e3c;
+      background: #e8f5e9;
+    }
+  </style>
+</head>
+<body>
+  <h1>GetInspire - Web Capture</h1>
 
-      .gi .status{ margin-top: 6px; white-space: pre-wrap; min-height: 2em; font-size:12px; color: var(--gi-subtle); }
-      .gi small{ color: var(--gi-subtle); display:block; margin-top:6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
+  <button id="captureBtn">Capture This Page</button>
       .gi .gi-progress-row{ display:flex; align-items:center; gap:8px; }
       .gi .gi-progress{ margin-top: 6px; height:10px; background: rgba(255,255,255,0.35); border:1px solid var(--gi-stroke); border-radius: 999px; overflow:hidden; backdrop-filter: blur(6px); flex:1; min-width:0; }
       /* Style bar via its ID to avoid collisions with site classes */
@@ -160,3 +153,8 @@
     <script src="popup.js"></script>
   </body>
   </html>
+  <div id="status">Ready to capture</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

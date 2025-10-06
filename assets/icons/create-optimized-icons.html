@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Dark-Mode Optimized Icons</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        canvas { border: 1px solid #ddd; margin: 10px; }
+        .dark { background: #222; }
+        button { padding: 10px 20px; margin: 5px; background: #4F46E5; color: white; border: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Dark-Mode Optimized GetInspire Icons</h1>
+
+    <div>
+        <h3>Light Theme Preview:</h3>
+        <canvas id="icon16" width="16" height="16"></canvas>
+        <canvas id="icon32" width="32" height="32"></canvas>
+        <canvas id="icon48" width="48" height="48"></canvas>
+        <canvas id="icon128" width="128" height="128"></canvas>
+    </div>
+
+    <div>
+        <h3>Dark Theme Preview:</h3>
+        <canvas id="icon16-dark" width="16" height="16" class="dark"></canvas>
+        <canvas id="icon32-dark" width="32" height="32" class="dark"></canvas>
+        <canvas id="icon48-dark" width="48" height="48" class="dark"></canvas>
+        <canvas id="icon128-dark" width="128" height="128" class="dark"></canvas>
+    </div>
+
+    <div>
+        <button onclick="generateAndDownload()">Generate & Download All Icons</button>
+    </div>
+
+    <script>
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const s = size / 128; // Scale factor
+
+            ctx.clearRect(0, 0, size, size);
+
+            // Background circle for contrast
+            const margin = Math.max(1, 3 * s);
+            const bgRadius = size/2 - margin;
+
+            // Semi-transparent white background for contrast on dark themes
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, bgRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.fill();
+            ctx.strokeStyle = '#E5E7EB';
+            ctx.lineWidth = Math.max(1, 1 * s);
+            ctx.stroke();
+
+            // Main lightbulb
+            const bulbW = 28 * s;
+            const bulbH = 40 * s;
+            const bulbX = (size - bulbW) / 2;
+            const bulbY = 18 * s;
+
+            // Bulb body - gradient fill
+            const gradient = ctx.createLinearGradient(bulbX, bulbY, bulbX + bulbW, bulbY + bulbH);
+            gradient.addColorStop(0, '#4F46E5'); // Indigo
+            gradient.addColorStop(1, '#7C3AED'); // Purple
+
+            ctx.beginPath();
+            ctx.roundRect(bulbX, bulbY, bulbW, bulbH, 14 * s);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = '#1F2937';
+            ctx.lineWidth = Math.max(1, 2 * s);
+            ctx.stroke();
+
+            // Screw threads
+            const threadY = bulbY + bulbH + 3 * s;
+            ctx.strokeStyle = '#374151';
+            ctx.lineWidth = Math.max(1, 2 * s);
+            ctx.lineCap = 'round';
+
+            for (let i = 0; i < 2; i++) {
+                const y = threadY + i * 3 * s;
+                const margin = (i + 2) * 2 * s;
+                ctx.beginPath();
+                ctx.moveTo(bulbX + margin, y);
+                ctx.lineTo(bulbX + bulbW - margin, y);
+                ctx.stroke();
+            }
+
+            // Base
+            const baseY = threadY + 8 * s;
+            const baseW = 22 * s;
+            const baseH = 5 * s;
+            const baseX = (size - baseW) / 2;
+
+            ctx.beginPath();
+            ctx.roundRect(baseX, baseY, baseW, baseH, 2 * s);
+            ctx.fillStyle = '#374151';
+            ctx.fill();
+            ctx.strokeStyle = '#1F2937';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Filament (for larger sizes)
+            if (size >= 24) {
+                ctx.strokeStyle = '#FDE047';
+                ctx.lineWidth = Math.max(1, 2 * s);
+                ctx.lineCap = 'round';
+
+                const centerX = size / 2;
+                const filY = bulbY + 12 * s;
+                const filW = 10 * s;
+
+                // Two filament lines
+                ctx.beginPath();
+                ctx.moveTo(centerX - filW/2, filY);
+                ctx.lineTo(centerX + filW/2, filY);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(centerX - filW/3, filY + 6 * s);
+                ctx.lineTo(centerX + filW/3, filY + 6 * s);
+                ctx.stroke();
+            }
+
+            // Inspiration rays (for sizes >= 32)
+            if (size >= 32) {
+                ctx.strokeStyle = '#F59E0B';
+                ctx.lineWidth = Math.max(1, 2 * s);
+                ctx.lineCap = 'round';
+
+                const centerX = size / 2;
+                const rayLen = 6 * s;
+
+                // Top ray
+                ctx.beginPath();
+                ctx.moveTo(centerX, bulbY - rayLen);
+                ctx.lineTo(centerX, bulbY - 2 * s);
+                ctx.stroke();
+
+                if (size >= 48) {
+                    // Side rays
+                    const sideY = bulbY + 6 * s;
+                    const sideX = bulbW/2 + 3 * s;
+
+                    // Right ray
+                    ctx.beginPath();
+                    ctx.moveTo(centerX + sideX, sideY);
+                    ctx.lineTo(centerX + sideX + rayLen, sideY);
+                    ctx.stroke();
+
+                    // Left ray
+                    ctx.beginPath();
+                    ctx.moveTo(centerX - sideX, sideY);
+                    ctx.lineTo(centerX - sideX - rayLen, sideY);
+                    ctx.stroke();
+
+                    if (size >= 128) {
+                        // Additional diagonal rays for largest size
+                        const diagOffset = 8 * s;
+                        const diagRayLen = 5 * s;
+
+                        // Top-right diagonal
+                        ctx.beginPath();
+                        ctx.moveTo(centerX + diagOffset, bulbY - diagOffset);
+                        ctx.lineTo(centerX + diagOffset + diagRayLen, bulbY - diagOffset - diagRayLen);
+                        ctx.stroke();
+
+                        // Top-left diagonal
+                        ctx.beginPath();
+                        ctx.moveTo(centerX - diagOffset, bulbY - diagOffset);
+                        ctx.lineTo(centerX - diagOffset - diagRayLen, bulbY - diagOffset - diagRayLen);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        // Polyfill for roundRect
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                this.beginPath();
+                this.moveTo(x + r, y);
+                this.lineTo(x + w - r, y);
+                this.arcTo(x + w, y, x + w, y + r, r);
+                this.lineTo(x + w, y + h - r);
+                this.arcTo(x + w, y + h, x + w - r, y + h, r);
+                this.lineTo(x + r, y + h);
+                this.arcTo(x, y + h, x, y + h - r, r);
+                this.lineTo(x, y + r);
+                this.arcTo(x, y, x + r, y, r);
+                this.closePath();
+            };
+        }
+
+        function downloadCanvas(canvas, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function generateAndDownload() {
+            const sizes = [16, 32, 48, 128];
+
+            sizes.forEach(size => {
+                const canvas = document.getElementById(`icon${size}`);
+                drawIcon(canvas, size);
+                downloadCanvas(canvas, `${size}.png`);
+            });
+
+            alert('All icons downloaded! Replace the existing icon files with these new ones.');
+        }
+
+        // Generate preview icons on load
+        window.onload = function() {
+            [16, 32, 48, 128].forEach(size => {
+                drawIcon(document.getElementById(`icon${size}`), size);
+                drawIcon(document.getElementById(`icon${size}-dark`), size);
+            });
+        };
+    </script>
+</body>
+</html>

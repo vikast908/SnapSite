@@ -1,11 +1,11 @@
 export const defaults = {
-  maxMillis: 90_000,
-  maxAssets: 2500,
-  maxZipMB: 750,
-  concurrency: 8,
-  requestTimeoutMs: 20_000,
-  scrollIdleMs: 2_000,
-  maxScrollIterations: 200,
+  maxMillis: 20_000,
+  maxAssets: 5000,
+  maxZipMB: 1000,
+  concurrency: 20,
+  requestTimeoutMs: 10_000,
+  scrollIdleMs: 1_500,
+  maxScrollIterations: 30,
   // Redaction replaces matched text with lorem-ipsum in the saved HTML.
   // Default to false to avoid surprising users with "text junk" captures.
   redact: false,
@@ -15,6 +15,8 @@ export const defaults = {
   stripScripts: true,
   fontFallback: true,
   showOverlay: false,
+  expandCarousels: true,  // Expand all carousel slides for capture
+  normalizeUX: true,  // Normalize all interactive UX patterns
   denylist: [
     String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
     String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),

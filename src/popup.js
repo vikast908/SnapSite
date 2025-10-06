@@ -7,19 +7,23 @@ const countMetaEl = document.getElementById('countMeta');
 const elapsedMetaEl = document.getElementById('elapsedMeta');
 const openOptionsLink = document.getElementById('openOptionsLink');
 const reportLink = document.getElementById('reportLink');
+// Simple popup script for GetInspire
+console.log('[GetInspire Popup] Loaded');
 
-let currentTabId = null;
-let captureMode = 'single'; // 'single' | 'crawl'
-let startedAt = 0;
-let lastTotal = 0;
-let lastDone = 0;
+const captureBtn = document.getElementById('captureBtn');
+const statusDiv = document.getElementById('status');
 
-async function getActiveTabId() {
+// Handle capture button click
+captureBtn.addEventListener('click', async () => {
+  console.log('[GetInspire Popup] Capture button clicked');
+
+  // Disable button
+  captureBtn.disabled = true;
+  setStatus('Starting capture...', 'normal');
+
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    return tabs?.[0]?.id || null;
-  } catch { return null; }
-}
+    // Get the active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
 function setStatus(s) { if (statusEl) statusEl.textContent = s; }
 function setSelected(btn, on){ try { if (!btn) return; btn.classList.toggle('selected', !!on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); } catch {} }
@@ -59,153 +63,63 @@ function setProgress(done, total) {
 }
 function resetProgress() { setProgress(0, 1); }
 
-async function runCapture() {
-  setModeUI('single');
-  currentTabId = await getActiveTabId();
-  if (!currentTabId) {
-    setStatus('No active tab.');
-    return;
-  }
-  setStatus('Starting...');
-  resetProgress();
-  stopBtn.disabled = false;
-  startedAt = Date.now(); lastDone = 0; lastTotal = 0;
-  try {
-    await chrome.scripting.executeScript({
-      target: { tabId: currentTabId },
-      files: ['src/vendor/jszip.min.js', 'src/content.js']
-    });
-  } catch (e) {
-    const msg = String(e || '');
-    // Helpful guidance + fallback for sites that block scripting via policy
-    if (/ExtensionsSettings policy|cannot be scripted/i.test(msg)) {
-      setStatus('Site blocks scripting. Requesting permission, then saving MHTML...');
-      try {
-        // Request per-origin permission under user gesture (popup click)
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        const url = tabs?.[0]?.url || '';
-        let origin = '';
-        try { origin = new URL(url).origin + '/*'; } catch {}
-        if (origin) {
-          const have = await chrome.permissions.contains({ origins: [origin] }).catch(() => false);
-          if (!have) {
-            const ok = await chrome.permissions.request({ origins: [origin] }).catch(() => false);
-            if (!ok) throw new Error('Permission denied for ' + origin);
-          }
-        }
-        await chrome.runtime.sendMessage({ type: 'GETINSPIRE_SAVE_MHTML_DIRECT', tabId: currentTabId });
-        setStatus('Saved MHTML snapshot.');
-      } catch (e2) {
-        setStatus('Unable to save MHTML: ' + String(e2));
-      }
-    } else {
-      setStatus('Error injecting scripts: ' + msg);
+    if (!tab) {
+      throw new Error('No active tab found');
     }
-    stopBtn.disabled = true;
-    resetProgress();
-  }
-}
 
-startBtn.addEventListener('click', runCapture);
+
+    console.log('[GetInspire Popup] Active tab:', tab.id, tab.url);
+
+    // Check if we can inject into this tab
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      throw new Error('Cannot capture browser pages');
+    }
+
+    // Send message to background script to start capture
+    chrome.runtime.sendMessage({
+      type: 'START_CAPTURE',
+      tabId: tab.id
+    });
+
+    setStatus('Capture in progress...', 'normal');
 
 // Crawl functionality removed from UI but backend functionality remains intact
+    // Re-enable button after 5 seconds
+    setTimeout(() => {
+      captureBtn.disabled = false;
+      setStatus('Ready to capture', 'normal');
+    }, 5000);
 
-stopBtn.addEventListener('click', async () => {
-  currentTabId = await getActiveTabId();
-  if (!currentTabId) return;
 
-  stopBtn.disabled = true;
-  if (captureMode === 'crawl') {
-    setStatus('Stopping crawl...');
-    try { await chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_STOP' }); } catch {}
-  } else {
-    setStatus('Stopping...');
-    try {
-      await chrome.tabs.sendMessage(currentTabId, { type: 'GETINSPIRE_STOP' });
-    } catch (e) {
-      setStatus('Error sending stop message: ' + String(e));
-    }
+  } catch (error) {
+    console.error('[GetInspire Popup] Error:', error);
+    setStatus('Error: ' + error.message, 'error');
+    captureBtn.disabled = false;
   }
 });
 
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'GETINSPIRE_STATUS' && captureMode === 'single') setStatus(msg.text);
-  if (msg.type === 'GETINSPIRE_PROGRESS' && captureMode === 'single') setProgress(msg.downloaded, msg.total);
-  if (msg.type === 'GETINSPIRE_DONE' && captureMode === 'single') {
-    setStatus('Downloaded ZIP.');
-    stopBtn.disabled = true;
-    setProgress(msg.total || 1, msg.total || 1);
-  }
-  if (msg.type === 'GETINSPIRE_ERROR') {
-    // In crawl mode, show error but stay in crawl state.
-    setStatus('Error: ' + (msg.error || 'Unknown error'));
-    if (captureMode !== 'crawl') {
-      stopBtn.disabled = true;
-      resetProgress();
-    }
-  }
-  // Crawl progress updates
-  if (msg.type === 'GETINSPIRE_CRAWL_PROGRESS') {
-    if (msg.running && captureMode !== 'crawl') setModeUI('crawl');
-    if (captureMode !== 'crawl') return;
-    if (msg.running === false) return; // ignore stale updates
-    const done = Number(msg.done || 0);
-    const total = Math.max(done, Number(msg.total || 0));
-    const elapsed = startedAt ? Date.now() - startedAt : 0;
-    const etaMs = done > 0 ? Math.max(0, Math.round((elapsed/done) * (total - done))) : 0;
-    const etaTxt = done > 0 ? `, ETA ${fmtTime(etaMs)}` : '';
-    setStatus((msg.status || 'Crawling...') + ` ${done}/${total}${etaTxt}`);
-    setProgress(done, total);
-    try {
-      if (countMetaEl) countMetaEl.textContent = `${done}/${total}`;
-      if (elapsedMetaEl) elapsedMetaEl.textContent = fmtTime(elapsed) + (etaTxt?(' • ' + etaTxt):'');
-    } catch {}
-  }
-  if (msg.type === 'GETINSPIRE_CRAWL_DONE' && captureMode === 'crawl') {
-    setStatus(`Crawl done: ${msg.done || 0} pages`);
-    stopBtn.disabled = true;
-    setModeUI('single');
-    setProgress(msg.done || 1, msg.done || 1);
+// Listen for messages from background/content scripts
+chrome.runtime.onMessage.addListener((message) => {
+  console.log('[GetInspire Popup] Received message:', message);
+
+  if (message.type === 'CAPTURE_STATUS') {
+    setStatus(message.status, 'normal');
+  } else if (message.type === 'CAPTURE_ERROR') {
+    setStatus('Error: ' + message.error, 'error');
+    captureBtn.disabled = false;
+  } else if (message.type === 'DOWNLOAD_SUCCESS') {
+    setStatus('Download completed!', 'success');
+    captureBtn.disabled = false;
   }
 });
 
-// When popup opens, ask background if a crawl is running and sync UI
-try {
-  chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_POLL' });
-} catch {}
+function setStatus(text, type = 'normal') {
+  statusDiv.textContent = text;
+  statusDiv.className = '';
 
-// Quick actions
-if (openOptionsLink) openOptionsLink.addEventListener('click', async (e) => {
-  e.preventDefault();
-  try {
-    const url = chrome.runtime.getURL('src/options.html');
-    if (chrome.windows && chrome.windows.create) {
-      await chrome.windows.create({ url, type: 'popup', width: 760, height: 720, focused: true });
-    } else {
-      window.open(url, 'GetInspireOptions', 'width=760,height=720,noopener,noreferrer');
-    }
-  } catch (err) {
-    try { window.open(chrome.runtime.getURL('src/options.html'), 'GetInspireOptions', 'width=760,height=720,noopener,noreferrer'); } catch {}
+  if (type === 'error') {
+    statusDiv.className = 'error';
+  } else if (type === 'success') {
+    statusDiv.className = 'success';
   }
-});
-if (reportLink) reportLink.addEventListener('click', async (e) => {
-  e.preventDefault();
-  try {
-    const manifest = chrome.runtime.getManifest?.() || { version: '' };
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const page = tab?.url || '';
-    const body = [
-      'Please describe the issue here...',
-      '',
-      `Version: ${manifest.version}`,
-      `Page: ${page}`,
-      `Progress: ${lastDone}/${lastTotal}`,
-    ].join('%0A');
-    const subj = encodeURIComponent('GetInspire feedback');
-    const href = `mailto:?subject=${subj}&body=${body}`;
-    // Open in a new tab context to respect popup restrictions
-    chrome.tabs.create({ url: href });
-  } catch {}
-});
-
-// (inline quick settings removed)
+}

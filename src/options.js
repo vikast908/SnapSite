@@ -47,6 +47,9 @@
     saved: document.getElementById('saved'),
     presetSocial: document.getElementById('presetSocial'),
     presetSearch: document.getElementById('presetSearch'),
+    themeAuto: document.getElementById('themeAuto'),
+    themeLight: document.getElementById('themeLight'),
+    themeDark: document.getElementById('themeDark'),
   };
 
   function load() {
@@ -66,6 +69,14 @@
       const list = (Array.isArray(v.denylist) ? v.denylist : defaults.denylist)
         .map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
       els.denylist.value = list;
+    });
+    // Load theme
+    chrome.storage.sync.get('getinspireTheme', (obj) => {
+      const mode = obj?.getinspireTheme;
+      const v = (mode === 'dark' || mode === 'light' || mode === 'auto') ? mode : 'auto';
+      if (els.themeAuto) els.themeAuto.checked = (v === 'auto');
+      if (els.themeLight) els.themeLight.checked = (v === 'light');
+      if (els.themeDark) els.themeDark.checked = (v === 'dark');
     });
   }
 
@@ -95,9 +106,18 @@
       denylist: deny
     };
 
-    chrome.storage.sync.set({ getinspireOptions: conf }, () => {
+    // Persist theme option
+    let theme = 'auto';
+    try {
+      if (els.themeLight?.checked) theme = 'light';
+      else if (els.themeDark?.checked) theme = 'dark';
+      else theme = 'auto';
+    } catch {}
+
+    chrome.storage.sync.set({ getinspireOptions: conf, getinspireTheme: theme }, () => {
       els.saved.style.display = 'inline';
       setTimeout(() => (els.saved.style.display = 'none'), 1000);
+      try { window.getInspireTheme && window.getInspireTheme.set(theme); } catch {}
     });
   }
 
