@@ -1,7 +1,6 @@
 const statusEl = document.getElementById('status');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
-const allBtn = document.getElementById('allBtn');
 const barEl = document.getElementById('bar');
 const pctEl = document.getElementById('pct');
 const countMetaEl = document.getElementById('countMeta');
@@ -27,15 +26,12 @@ function setSelected(btn, on){ try { if (!btn) return; btn.classList.toggle('sel
 function setModeUI(mode){
   captureMode = mode;
   if (mode === 'crawl'){
-    setSelected(startBtn, false); setSelected(allBtn, true);
+    setSelected(startBtn, false);
     try { startBtn.disabled = true; } catch {}
-    try { allBtn.disabled = false; } catch {}
     try { stopBtn.disabled = false; } catch {}
-    try { allBtn.focus(); } catch {}
   } else {
-    setSelected(startBtn, true); setSelected(allBtn, false);
+    setSelected(startBtn, true);
     try { startBtn.disabled = false; } catch {}
-    try { allBtn.disabled = false; } catch {}
     try { stopBtn.disabled = true; } catch {}
   }
 }
@@ -112,19 +108,7 @@ async function runCapture() {
 
 startBtn.addEventListener('click', runCapture);
 
-async function runCrawl() {
-  setModeUI('crawl');
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) { setStatus('No active tab.'); return; }
-    startedAt = Date.now(); lastDone = 0; lastTotal = 0; resetProgress();
-    setStatus('Crawl: starting...');
-    chrome.runtime.sendMessage({ type: 'GETINSPIRE_CRAWL_START', startTabId: tab.id, startUrl: tab.url });
-  } catch (e) {
-    setStatus('Crawl start error: ' + String(e));
-  }
-}
-if (allBtn) allBtn.addEventListener('click', () => { if (captureMode === 'crawl') return; runCrawl(); });
+// Crawl functionality removed from UI but backend functionality remains intact
 
 stopBtn.addEventListener('click', async () => {
   currentTabId = await getActiveTabId();

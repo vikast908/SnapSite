@@ -1238,16 +1238,23 @@
         Promise.allSettled(pending.map(im => im.decode ? im.decode().catch(()=>{}) : new Promise(r=>{ im.addEventListener('load',r,{once:true}); im.addEventListener('error',r,{once:true}); setTimeout(r,1500);}))),
         new Promise(r => setTimeout(r, 2500))
       ]);
-      // Loosen obvious carousels so slides aren't cropped, but avoid global
-      // transform resets which can badly distort iconography (e.g., YouTube).
+      // Loosen obvious carousels so slides aren't cropped, but preserve transforms
+      // to maintain carousel positioning and animations.
       const isYouTubeDomain = /(^|\.)youtube\.com$/i.test(location.hostname||'');
       const carSel = '[class*="carousel"], [class*="slider"], [class*="slick"], [class*="swiper"], [data-carousel]';
       document.querySelectorAll(carSel).forEach(c => {
         try {
           const cs = getComputedStyle(c);
-          if (cs.overflowX === 'hidden' || /hidden|clip/.test(cs.overflow)) c.style.overflow = 'visible';
-          // Only neutralize transforms on typical carousel wrappers; skip on YouTube
-          if (!isYouTubeDomain && cs.transform && cs.transform !== 'none') c.style.transform = 'none';
+          // Only expand overflow if carousel is a direct wrapper with hidden overflow
+          // Check if it's likely a carousel container (has multiple children)
+          const childCount = c.children.length;
+          if (childCount > 1 && (cs.overflowX === 'hidden' || /hidden|clip/.test(cs.overflow))) {
+            // Instead of making overflow visible (breaks layout), try overflow-x auto
+            c.style.overflowX = 'auto';
+            c.style.scrollBehavior = 'smooth';
+          }
+          // Preserve transforms entirely - they're essential for carousel positioning
+          // Removing transforms breaks translateX-based slide positioning
         } catch {}
       });
       // Global transform stripping removed (caused giant icons on some sites).

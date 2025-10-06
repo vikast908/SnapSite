@@ -56,7 +56,8 @@
         display:inline-flex; align-items:center; justify-content:center;
         width:28px; height:28px; border:1px solid var(--gi-stroke); border-radius:8px;
         background: rgba(255,255,255,0.35); color: inherit; text-decoration:none; cursor:pointer;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); transition: box-shadow .2s ease, transform .06s ease;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); transition: box-shadow .15s ease, transform .06s ease-out;
+        will-change: transform, box-shadow;
       }
       .gi .icon-btn:hover{ box-shadow: 0 2px 10px rgba(2,6,23,.15), inset 0 1px 0 rgba(255,255,255,.25); }
       .gi .icon-btn:active{ transform: translateY(1px); }
@@ -78,8 +79,9 @@
         appearance: none; border:1px solid var(--gi-stroke); border-radius: 10px;
         padding: 9px 14px; cursor: pointer; background: rgba(255,255,255,0.35);
         color: var(--gi-text); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
-        transition: box-shadow .2s ease, transform .06s ease, background .2s ease;
+        transition: box-shadow .15s ease, transform .06s ease-out, background .15s ease;
         backdrop-filter: blur(6px);
+        will-change: transform, box-shadow;
       }
       @media (prefers-color-scheme: dark){
         .gi button{ background: rgba(17,24,39,0.35); }
@@ -100,7 +102,7 @@
       .gi .gi-progress-row{ display:flex; align-items:center; gap:8px; }
       .gi .gi-progress{ margin-top: 6px; height:10px; background: rgba(255,255,255,0.35); border:1px solid var(--gi-stroke); border-radius: 999px; overflow:hidden; backdrop-filter: blur(6px); flex:1; min-width:0; }
       /* Style bar via its ID to avoid collisions with site classes */
-      .gi .gi-progress #bar{ height:100%; width:0%; background: linear-gradient(90deg, var(--gi-accent), #a78bfa); transition: width .25s ease; }
+      .gi .gi-progress #bar{ height:100%; width:0%; background: linear-gradient(90deg, var(--gi-accent), #a78bfa); transition: width .2s ease-out; will-change: width; }
       .gi .pct{ min-width: 32px; text-align:right; font-variant-numeric: tabular-nums; color: var(--gi-text); }
       .gi .meta{ margin-top:4px; display:flex; align-items:center; justify-content: space-between; gap:8px; font-size:12px; color: var(--gi-subtle); }
     </style>
@@ -141,7 +143,6 @@
     <!-- Inline settings panel removed; gear icon opens a separate popup window -->
     <div class="gi-row">
       <button id="startBtn" class="selected" aria-pressed="true">This page</button>
-      <button id="allBtn" aria-pressed="false">All the pages</button>
       <button id="stopBtn" disabled>Stop</button>
     </div>
     <div class="status" id="status">ready to start?</div>
