@@ -1,106 +1,527 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>GetInspire Options</title>
-    <link rel="stylesheet" href="ui.css" />
-    <style>
-      body { padding: 16px; max-width: 720px; }
-      label { display: block; margin-top: 12px; }
-      input[type=number] { width: 120px; }
-      textarea { width: 100%; height: 120px; }
-      .row { margin: 8px 0; }
-      .inline { display: inline-flex; align-items: center; gap: 10px; }
-      fieldset { border: 1px solid var(--ui-stroke); border-radius: 8px; padding: 8px 12px; }
-      legend { padding: 0 6px; color: var(--ui-subtle); }
-      button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--ui-stroke); background: var(--ui-muted-surface); cursor: pointer; color: inherit; }
-      button:hover { box-shadow: 0 2px 10px rgba(2,6,23,.15), inset 0 1px 0 rgba(255,255,255,.25); }
-    </style>
-  </head>
-  <body>
-    <h2>GetInspire Settings</h2>
-    <div class="row">
-      <fieldset>
-        <legend>Theme</legend>
-        <div class="inline">
-          <label class="inline"><input type="radio" name="theme" id="themeAuto" value="auto"> Auto</label>
-          <label class="inline"><input type="radio" name="theme" id="themeLight" value="light"> Light</label>
-          <label class="inline"><input type="radio" name="theme" id="themeDark" value="dark"> Dark</label>
+<head>
+  <meta charset="utf-8" />
+  <title>GetInspire Settings</title>
+  <link rel="stylesheet" href="ui.css" />
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+      min-height: 100vh;
+      background: var(--ui-bg);
+      color: var(--ui-text);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px 0;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ui-text);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-icon {
+      width: 32px;
+      height: 32px;
+      color: var(--ui-accent);
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--ui-subtle);
+      font-size: 14px;
+    }
+
+    /* Settings sections */
+    .settings-section {
+      background: var(--ui-surface);
+      border: 1px solid var(--ui-stroke);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+    }
+
+    .section-title {
+      margin: 0 0 20px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ui-text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-icon {
+      width: 20px;
+      height: 20px;
+      color: var(--ui-accent);
+    }
+
+    /* Form groups */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ui-text);
+    }
+
+    .form-description {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--ui-subtle);
+      line-height: 1.5;
+    }
+
+    /* Input fields */
+    input[type="number"],
+    textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--ui-stroke);
+      border-radius: 10px;
+      background: var(--ui-muted-surface);
+      color: var(--ui-text);
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input[type="number"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--ui-accent);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+    }
+
+    /* Checkbox/Radio */
+    .checkbox-group,
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .checkbox-item,
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      padding: 12px;
+      border-radius: 10px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+
+    .checkbox-item:hover,
+    .radio-item:hover {
+      background: rgba(59, 130, 246, 0.05);
+      border-color: rgba(59, 130, 246, 0.1);
+      transform: translateX(2px);
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--ui-accent);
+      transition: transform 0.15s ease;
+    }
+
+    input[type="checkbox"]:checked,
+    input[type="radio"]:checked {
+      transform: scale(1.1);
+    }
+
+    .checkbox-item label,
+    .radio-item label {
+      flex: 1;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--ui-text);
+      transition: color 0.2s ease;
+    }
+
+    .checkbox-item:has(input:checked) label,
+    .radio-item:has(input:checked) label {
+      color: var(--ui-accent);
+      font-weight: 500;
+    }
+
+    /* Theme selector */
+    .theme-selector {
+      display: flex;
+      gap: 10px;
+    }
+
+    .theme-option {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid var(--ui-stroke);
+      border-radius: 10px;
+      background: var(--ui-muted-surface);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+      font-size: 14px;
+      color: var(--ui-text);
+    }
+
+    .theme-option:hover {
+      border-color: var(--ui-accent);
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    .theme-option input[type="radio"] {
+      display: none;
+    }
+
+    .theme-option input[type="radio"]:checked + .theme-label {
+      font-weight: 600;
+    }
+
+    .theme-option:has(input[type="radio"]:checked) {
+      border-color: var(--ui-accent);
+      background: rgba(59, 130, 246, 0.1);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Buttons */
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .btn-save {
+      padding: 12px 24px;
+      background: var(--ui-accent);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-save:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-save:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      padding: 12px 24px;
+      background: var(--ui-muted-surface);
+      color: var(--ui-text);
+      border: 1px solid var(--ui-stroke);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(59, 130, 246, 0.05);
+      border-color: var(--ui-accent);
+    }
+
+    /* Preset buttons */
+    .preset-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-preset {
+      padding: 8px 14px;
+      background: var(--ui-muted-surface);
+      color: var(--ui-text);
+      border: 1px solid var(--ui-stroke);
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-preset:hover {
+      background: rgba(59, 130, 246, 0.05);
+      border-color: var(--ui-accent);
+    }
+
+    /* Success message */
+    .success-message {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      color: #10b981;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .success-message.show {
+      display: flex;
+    }
+
+    .success-icon {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Grid layout for number inputs */
+    .input-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--ui-stroke);
+      margin: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>
+        <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09c0 .67.39 1.27 1 1.51.6.24 1.28.11 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.44.54-.57 1.22-.33 1.82.24.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.27.39-1.51 1z"/>
+        </svg>
+        Settings
+      </h1>
+      <p>Customize how GetInspire captures and saves web pages</p>
+    </div>
+
+    <!-- Theme Section -->
+    <div class="settings-section">
+      <h2 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>
+        </svg>
+        Appearance
+      </h2>
+      <div class="form-group">
+        <label class="form-label">Theme</label>
+        <div class="theme-selector">
+          <label class="theme-option">
+            <input type="radio" name="theme" id="themeAuto" value="auto">
+            <span class="theme-label">Auto</span>
+          </label>
+          <label class="theme-option">
+            <input type="radio" name="theme" id="themeLight" value="light">
+            <span class="theme-label">Light</span>
+          </label>
+          <label class="theme-option">
+            <input type="radio" name="theme" id="themeDark" value="dark">
+            <span class="theme-label">Dark</span>
+          </label>
         </div>
-      </fieldset>
-    </div>
-    <div class="row">
-      <label>Max runtime (seconds)
-        <input id="maxMillis" type="number" min="10" max="600" step="5" />
-      </label>
-    </div>
-    <div class="row">
-      <label>Max assets
-        <input id="maxAssets" type="number" min="100" max="20000" step="50" />
-      </label>
-    </div>
-    <div class="row">
-      <label>Max ZIP size (MB)
-        <input id="maxZipMB" type="number" min="50" max="4096" step="50" />
-      </label>
-    </div>
-    <div class="row">
-      <label>Concurrency (parallel downloads)
-        <input id="concurrency" type="number" min="1" max="32" step="1" />
-      </label>
-    </div>
-    <div class="row">
-      <label>Denylist (one regex per line)</label>
-      <textarea id="denylist"></textarea>
-    </div>
-    <div class="row">
-      <label>
-        <input id="redact" type="checkbox" /> Redact authenticated text
-      </label>
-    </div>
-    <div class="row">
-      <label>
-        <input id="saveWithoutPrompt" type="checkbox" /> Save ZIP without prompt
-      </label>
-    </div>
-    <div class="row">
-      <label>
-        <input id="skipVideo" type="checkbox" /> Skip video assets (audio allowed)
-      </label>
-    </div>
-    <div class="row">
-      <label>
-        <input id="replaceIframesWithPoster" type="checkbox" /> Replace external videos/iframes with thumbnails
-      </label>
-    </div>
-      <div class="row">
-        <label>
-          <input id="stripScripts" type="checkbox" /> Strip scripts and inline handlers for offline safety
-        </label>
       </div>
-      <div class="row">
-        <label>
-          <input id="showOverlay" type="checkbox" /> Show in-page progress overlay during capture
-        </label>
-      </div>
-      <div class="row">
-        <label>
-          <input id="fontFallback" type="checkbox" /> Enable font fallback (improve offline rendering)
-        </label>
-      </div>
-      <div class="row">
-        <strong>Presets:</strong>
-        <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
-          <button id="presetSocial" type="button">Add Social Feeds</button>
-          <button id="presetSearch" type="button">Add Search Pages</button>
+    </div>
+
+    <!-- Performance Section -->
+    <div class="settings-section">
+      <h2 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+        Performance
+      </h2>
+      <div class="input-grid">
+        <div class="form-group">
+          <label class="form-label" for="maxMillis">
+            Max Runtime
+            <span class="form-description">Maximum capture time (seconds)</span>
+          </label>
+          <input id="maxMillis" type="number" min="10" max="600" step="5" />
         </div>
-        <small style="display:block; color:#64748b;">Adds common denylist patterns to the textarea above. Click Save to apply.</small>
+        <div class="form-group">
+          <label class="form-label" for="concurrency">
+            Concurrency
+            <span class="form-description">Parallel downloads</span>
+          </label>
+          <input id="concurrency" type="number" min="1" max="32" step="1" />
+        </div>
       </div>
-      <div class="row">
-        <button id="saveBtn" class="btn">Save</button>
-        <span id="saved" style="margin-left:8px;color:green;display:none;">Saved</span>
+      <div class="input-grid">
+        <div class="form-group">
+          <label class="form-label" for="maxAssets">
+            Max Assets
+            <span class="form-description">Maximum files to capture</span>
+          </label>
+          <input id="maxAssets" type="number" min="100" max="20000" step="50" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="maxZipMB">
+            Max ZIP Size
+            <span class="form-description">Maximum file size (MB)</span>
+          </label>
+          <input id="maxZipMB" type="number" min="50" max="4096" step="50" />
+        </div>
       </div>
-      <script src="theme.js"></script>
-      <script type="module" src="options.js"></script>
-  </body>
-  </html>
+    </div>
+
+    <!-- Capture Options Section -->
+    <div class="settings-section">
+      <h2 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        Capture Options
+      </h2>
+      <div class="checkbox-group">
+        <div class="checkbox-item">
+          <input id="saveWithoutPrompt" type="checkbox" />
+          <label for="saveWithoutPrompt">
+            Save ZIP without prompt
+            <span class="form-description">Download automatically without filename dialog</span>
+          </label>
+        </div>
+        <div class="checkbox-item">
+          <input id="showOverlay" type="checkbox" />
+          <label for="showOverlay">
+            Show in-page progress overlay
+            <span class="form-description">Display capture progress on the page</span>
+          </label>
+        </div>
+        <div class="checkbox-item">
+          <input id="skipVideo" type="checkbox" />
+          <label for="skipVideo">
+            Skip video assets
+            <span class="form-description">Exclude videos to reduce file size (audio allowed)</span>
+          </label>
+        </div>
+        <div class="checkbox-item">
+          <input id="replaceIframesWithPoster" type="checkbox" />
+          <label for="replaceIframesWithPoster">
+            Replace external videos with thumbnails
+            <span class="form-description">Use poster images for embedded videos/iframes</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Security Section -->
+    <div class="settings-section">
+      <h2 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        Security & Privacy
+      </h2>
+      <div class="checkbox-group">
+        <div class="checkbox-item">
+          <input id="stripScripts" type="checkbox" />
+          <label for="stripScripts">
+            Strip scripts and handlers
+            <span class="form-description">Remove JavaScript for offline safety</span>
+          </label>
+        </div>
+        <div class="checkbox-item">
+          <input id="redact" type="checkbox" />
+          <label for="redact">
+            Redact authenticated text
+            <span class="form-description">Replace sensitive text with placeholders</span>
+          </label>
+        </div>
+        <div class="checkbox-item">
+          <input id="fontFallback" type="checkbox" />
+          <label for="fontFallback">
+            Enable font fallback
+            <span class="form-description">Improve offline text rendering</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Denylist Section -->
+    <div class="settings-section">
+      <h2 class="section-title">
+        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="m4.93 4.93 14.14 14.14"/>
+        </svg>
+        Blocked Sites
+      </h2>
+      <div class="form-group">
+        <label class="form-label" for="denylist">
+          URL Patterns
+          <span class="form-description">One regex pattern per line to block sites from crawling</span>
+        </label>
+        <textarea id="denylist" placeholder="https?://example\.com/.*"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quick Presets</label>
+        <div class="preset-buttons">
+          <button id="presetSocial" type="button" class="btn-preset">Add Social Media</button>
+          <button id="presetSearch" type="button" class="btn-preset">Add Search Pages</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Button -->
+    <div class="button-group">
+      <button id="saveBtn" class="btn-save">Save Settings</button>
+      <div id="saved" class="success-message">
+        <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        Settings saved successfully!
+      </div>
+    </div>
+  </div>
+
+  <script src="theme.js"></script>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

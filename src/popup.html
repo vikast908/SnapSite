@@ -4,19 +4,70 @@
   <meta charset="utf-8">
   <link rel="stylesheet" href="ui.css">
   <style>
+    /* Theme variables - Light (default) */
+    :root {
+      --gi-bg: #ffffff;
+      --gi-text: #0f172a;
+      --gi-subtle: #64748b;
+      --gi-stroke: rgba(0, 0, 0, 0.08);
+      --gi-accent: #3b82f6;
+      --gi-button-bg: rgba(255, 255, 255, 0.6);
+      --gi-button-hover: rgba(59, 130, 246, 0.1);
+      --gi-panel-bg: rgba(255, 255, 255, 0.4);
+    }
+
+    /* Dark theme */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --gi-bg: #000000;
+        --gi-text: #ffffff;
+        --gi-subtle: #d1d5db;
+        --gi-stroke: rgba(255, 255, 255, 0.2);
+        --gi-accent: #60a5fa;
+        --gi-button-bg: rgba(255, 255, 255, 0.12);
+        --gi-button-hover: rgba(96, 165, 250, 0.25);
+        --gi-panel-bg: rgba(255, 255, 255, 0.08);
+      }
+    }
+
+    /* Explicit theme overrides */
+    html[data-theme="light"] {
+      --gi-bg: #ffffff;
+      --gi-text: #0f172a;
+      --gi-subtle: #64748b;
+      --gi-stroke: rgba(0, 0, 0, 0.08);
+      --gi-accent: #3b82f6;
+      --gi-button-bg: rgba(255, 255, 255, 0.6);
+      --gi-button-hover: rgba(59, 130, 246, 0.1);
+      --gi-panel-bg: rgba(255, 255, 255, 0.4);
+    }
+
+    html[data-theme="dark"] {
+      --gi-bg: #000000;
+      --gi-text: #ffffff;
+      --gi-subtle: #d1d5db;
+      --gi-stroke: rgba(255, 255, 255, 0.2);
+      --gi-accent: #60a5fa;
+      --gi-button-bg: rgba(255, 255, 255, 0.12);
+      --gi-button-hover: rgba(96, 165, 250, 0.25);
+      --gi-panel-bg: rgba(255, 255, 255, 0.08);
+    }
+
     body {
       width: 300px;
       padding: 12px;
       margin: 0;
+      background: var(--gi-bg);
+      transition: background-color 0.3s ease, color 0.3s ease;
     }
 
     /* GetInspire specific styles */
     .gi {
-      --gi-bg: var(--ui-bg);
-      --gi-text: var(--ui-text);
-      --gi-subtle: var(--ui-subtle);
-      --gi-stroke: var(--ui-stroke);
-      --gi-accent: var(--ui-accent);
+      --gi-bg: var(--gi-bg);
+      --gi-text: var(--gi-text);
+      --gi-subtle: var(--gi-subtle);
+      --gi-stroke: var(--gi-stroke);
+      --gi-accent: var(--gi-accent);
     }
 
     /* Top bar with actions on the right */
@@ -54,17 +105,17 @@
       height: 28px;
       border: 1px solid var(--gi-stroke);
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.35);
-      color: inherit;
+      background: var(--gi-button-bg);
+      color: var(--gi-text);
       text-decoration: none;
       cursor: pointer;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
-      transition: box-shadow .15s ease, transform .06s ease-out;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       will-change: transform, box-shadow;
     }
 
     .gi .icon-btn:hover {
-      box-shadow: 0 2px 10px rgba(2, 6, 23, .15), inset 0 1px 0 rgba(255, 255, 255, .25);
+      background: var(--gi-button-hover);
+      border-color: var(--gi-accent);
     }
 
     .gi .icon-btn:active {
@@ -77,31 +128,34 @@
       display: block;
     }
 
+    /* Dark mode enhancements */
+    html[data-theme="dark"] .gi .icon-btn {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .gi .icon-btn {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+    }
+
     .gi button {
       appearance: none;
       border: 1px solid var(--gi-stroke);
       border-radius: 10px;
       padding: 9px 14px;
       cursor: pointer;
-      background: rgba(255, 255, 255, 0.35);
+      background: var(--gi-button-bg);
       color: var(--gi-text);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
-      transition: box-shadow .15s ease, transform .06s ease-out, background .15s ease;
-      backdrop-filter: blur(6px);
+      font-weight: 500;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       will-change: transform, box-shadow;
     }
 
-    @media (prefers-color-scheme: dark) {
-      .gi button {
-        background: rgba(17, 24, 39, 0.35);
-      }
-      .gi .icon-btn {
-        background: rgba(17, 24, 39, 0.35);
-      }
-    }
-
     .gi button:hover {
-      box-shadow: 0 2px 10px rgba(2, 6, 23, .15), inset 0 1px 0 rgba(255, 255, 255, .25);
+      background: var(--gi-button-hover);
+      border-color: var(--gi-accent);
+      transform: translateY(-1px);
     }
 
     .gi button:active {
@@ -116,6 +170,18 @@
     .gi #startBtn {
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.25));
       border-color: rgba(99, 102, 241, 0.45);
+    }
+
+    html[data-theme="dark"] .gi #startBtn {
+      background: linear-gradient(180deg, rgba(96, 165, 250, 0.25), rgba(96, 165, 250, 0.12));
+      border-color: rgba(96, 165, 250, 0.5);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .gi #startBtn {
+        background: linear-gradient(180deg, rgba(96, 165, 250, 0.25), rgba(96, 165, 250, 0.12));
+        border-color: rgba(96, 165, 250, 0.5);
+      }
     }
 
     .gi #startBtn:hover {
@@ -140,8 +206,16 @@
     .gi .status {
       margin-bottom: 8px;
       font-size: 12px;
-      color: var(--gi-subtle);
+      color: var(--gi-text);
       min-height: 1.5em;
+      font-weight: 400;
+    }
+
+    .gi .gi-top.panel {
+      background: var(--gi-panel-bg);
+      border: 1px solid var(--gi-stroke);
+      padding: 8px;
+      border-radius: 12px;
     }
 
     .gi .gi-progress-row {
@@ -153,11 +227,10 @@
     .gi .gi-progress {
       margin-top: 6px;
       height: 10px;
-      background: rgba(255, 255, 255, 0.35);
+      background: var(--gi-button-bg);
       border: 1px solid var(--gi-stroke);
       border-radius: 999px;
       overflow: hidden;
-      backdrop-filter: blur(6px);
       flex: 1;
       min-width: 0;
     }
@@ -176,6 +249,7 @@
       font-variant-numeric: tabular-nums;
       color: var(--gi-text);
       font-size: 12px;
+      font-weight: 500;
     }
 
     .gi .meta {
@@ -185,15 +259,17 @@
       justify-content: space-between;
       gap: 8px;
       font-size: 12px;
-      color: var(--gi-subtle);
+      color: var(--gi-text);
+      opacity: 0.8;
     }
 
     .gi #hint {
       display: block;
       margin-top: 8px;
       font-size: 10px;
-      color: var(--gi-subtle);
+      color: var(--gi-text);
       text-align: center;
+      opacity: 0.6;
     }
   </style>
 </head>
@@ -212,21 +288,18 @@
       </svg>
       <span>GetInspire</span>
     </h3>
+    <a href="#" id="themeToggle" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
+      <!-- sun/moon icon (will be updated by JS) -->
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="5"/>
+        <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>
+      </svg>
+    </a>
     <a href="#" id="openOptionsLink" class="icon-btn" title="Options" aria-label="Options">
       <!-- gear icon -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09c0 .67.39 1.27 1 1.51.6.24 1.28.11 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.44.54-.57 1.22-.33 1.82.24.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.27.39-1.51 1z"/>
-      </svg>
-    </a>
-    <a href="#" id="reportLink" class="icon-btn" title="Report issue" aria-label="Report issue">
-      <!-- bug icon -->
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M8 9a4 4 0 1 1 8 0"/>
-        <path d="M3 13h18"/>
-        <path d="M5 7l2 2"/>
-        <path d="M19 7l-2 2"/>
-        <rect x="8" y="9" width="8" height="11" rx="4"/>
       </svg>
     </a>
   </div>

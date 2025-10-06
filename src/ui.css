@@ -6,7 +6,7 @@
   --ui-surface: rgba(255,255,255,0.6);
   --ui-stroke: rgba(0,0,0,0.08);
   --ui-text: #0f172a;
-  --ui-subtle: #475569;
+  --ui-subtle: #64748b;
   --ui-accent: #3b82f6;
   --ui-accent-2: #a78bfa;
   --ui-shadow: 0 12px 28px rgba(2,6,23,0.15);
@@ -16,36 +16,36 @@
 /* System dark */
 @media (prefers-color-scheme: dark){
   :root{
-    --ui-bg: #0b1220;
-    --ui-surface: rgba(15,23,42,0.55);
-    --ui-stroke: rgba(255,255,255,0.12);
-    --ui-text: #e5e7eb;
-    --ui-subtle: #94a3b8;
+    --ui-bg: #000000;
+    --ui-surface: rgba(255,255,255,0.03);
+    --ui-stroke: rgba(255,255,255,0.15);
+    --ui-text: #ffffff;
+    --ui-subtle: #a8b3cf;
     --ui-accent: #60a5fa;
     --ui-accent-2: #8b5cf6;
-    --ui-shadow: 0 12px 32px rgba(0,0,0,0.45);
-    --ui-muted-surface: rgba(17,24,39,0.4);
+    --ui-shadow: 0 12px 32px rgba(0,0,0,0.6);
+    --ui-muted-surface: rgba(255,255,255,0.05);
   }
 }
 
 /* Explicit theme overrides via data-theme attribute */
 html[data-theme="dark"]{
-  --ui-bg: #0b1220;
-  --ui-surface: rgba(15,23,42,0.55);
-  --ui-stroke: rgba(255,255,255,0.12);
-  --ui-text: #e5e7eb;
-  --ui-subtle: #94a3b8;
+  --ui-bg: #000000;
+  --ui-surface: rgba(255,255,255,0.03);
+  --ui-stroke: rgba(255,255,255,0.15);
+  --ui-text: #ffffff;
+  --ui-subtle: #a8b3cf;
   --ui-accent: #60a5fa;
   --ui-accent-2: #8b5cf6;
-  --ui-shadow: 0 12px 32px rgba(0,0,0,0.45);
-  --ui-muted-surface: rgba(17,24,39,0.4);
+  --ui-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  --ui-muted-surface: rgba(255,255,255,0.05);
 }
 html[data-theme="light"]{
   --ui-bg: #ffffff;
   --ui-surface: rgba(255,255,255,0.6);
   --ui-stroke: rgba(0,0,0,0.08);
   --ui-text: #0f172a;
-  --ui-subtle: #475569;
+  --ui-subtle: #64748b;
   --ui-accent: #3b82f6;
   --ui-accent-2: #a78bfa;
   --ui-shadow: 0 12px 28px rgba(2,6,23,0.15);

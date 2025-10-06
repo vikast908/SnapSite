@@ -1,35 +1,26 @@
-;(async () => {
-  // Load shared defaults from src/defaults.js
-  const { defaults } = await import(chrome.runtime.getURL('src/defaults.js')).catch(() => ({ defaults: {
-    maxMillis: 90_000,
-    maxAssets: 2500,
-    maxZipMB: 750,
-    concurrency: 8,
-    requestTimeoutMs: 20_000,
-    scrollIdleMs: 2_000,
-    maxScrollIterations: 200,
-    // Keep in sync with src/defaults.js
-    redact: false,
-    saveWithoutPrompt: false,
-    skipVideo: false,
-    replaceIframesWithPoster: true,
-    stripScripts: true,
-    denylist: [
-      String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
-      String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
-      String(/https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i),
-      String(/https?:\/\/([^\/]+\.)?(reddit\.com)\//i),
-      String(/https?:\/\/([^\/]+\.)?linkedin\.com\/feed/i),
-      String(/https?:\/\/([^\/]+\.)?pinterest\.[^\/]+\//i),
-      String(/https?:\/\/([^\/]+\.)?medium\.com\/$/i),
-      String(/https?:\/\/news\.google\.com\//i),
-      String(/https?:\/\/([^\/]+\.)?quora\.com\//i),
-      // Allow YouTube Playlists feed (finite), block other /feed pages
-      String(/https?:\/\/([^\/]+\.)?youtube\.com\/feed\/(?!playlists)/i),
-      String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i),
-    ],
-  }}));
+// Options page functionality for GetInspire
+(async () => {
+  console.log('[GetInspire Options] Initializing...');
 
+  // Load shared defaults
+  const { defaults } = await import(chrome.runtime.getURL('src/defaults.js')).catch(() => ({
+    defaults: {
+      maxMillis: 20_000,
+      maxAssets: 5000,
+      maxZipMB: 1000,
+      concurrency: 20,
+      redact: false,
+      saveWithoutPrompt: false,
+      skipVideo: false,
+      replaceIframesWithPoster: true,
+      stripScripts: true,
+      showOverlay: false,
+      fontFallback: true,
+      denylist: []
+    }
+  }));
+
+  // Get all form elements
   const els = {
     maxMillis: document.getElementById('maxMillis'),
     maxAssets: document.getElementById('maxAssets'),
@@ -52,103 +43,214 @@
     themeDark: document.getElementById('themeDark'),
   };
 
-  function load() {
-    chrome.storage.sync.get('getinspireOptions', (obj) => {
-      const v = obj.getinspireOptions || defaults;
-      els.maxMillis.value = Math.floor((v.maxMillis ?? defaults.maxMillis) / 1000);
-      els.maxAssets.value = v.maxAssets ?? defaults.maxAssets;
-      els.maxZipMB.value = v.maxZipMB ?? defaults.maxZipMB;
-      els.concurrency.value = v.concurrency ?? defaults.concurrency;
-      els.redact.checked = v.redact ?? defaults.redact;
-      els.saveWithoutPrompt.checked = v.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
-      els.skipVideo.checked = v.skipVideo ?? defaults.skipVideo;
-      els.replaceIframesWithPoster.checked = v.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster;
-      els.stripScripts.checked = v.stripScripts ?? defaults.stripScripts;
-      if (els.showOverlay) els.showOverlay.checked = v.showOverlay ?? defaults.showOverlay;
-      if (els.fontFallback) els.fontFallback.checked = v.fontFallback ?? defaults.fontFallback;
-      const list = (Array.isArray(v.denylist) ? v.denylist : defaults.denylist)
-        .map(s => s.replace(/^\/(.*)\/i$/, '/$1/i')).join('\n');
-      els.denylist.value = list;
-    });
-    // Load theme
-    chrome.storage.sync.get('getinspireTheme', (obj) => {
-      const mode = obj?.getinspireTheme;
-      const v = (mode === 'dark' || mode === 'light' || mode === 'auto') ? mode : 'auto';
-      if (els.themeAuto) els.themeAuto.checked = (v === 'auto');
-      if (els.themeLight) els.themeLight.checked = (v === 'light');
-      if (els.themeDark) els.themeDark.checked = (v === 'dark');
+  // Load settings from storage
+  function loadSettings() {
+    console.log('[GetInspire Options] Loading settings...');
+
+    chrome.storage.sync.get(['getinspireOptions', 'getinspireTheme'], (result) => {
+      const options = result.getinspireOptions || {};
+      const theme = result.getinspireTheme || 'auto';
+
+      // Load number inputs (convert milliseconds to seconds for display)
+      els.maxMillis.value = Math.floor((options.maxMillis ?? defaults.maxMillis) / 1000);
+      els.maxAssets.value = options.maxAssets ?? defaults.maxAssets;
+      els.maxZipMB.value = options.maxZipMB ?? defaults.maxZipMB;
+      els.concurrency.value = options.concurrency ?? defaults.concurrency;
+
+      // Load checkboxes
+      els.redact.checked = options.redact ?? defaults.redact;
+      els.saveWithoutPrompt.checked = options.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
+      els.skipVideo.checked = options.skipVideo ?? defaults.skipVideo;
+      els.replaceIframesWithPoster.checked = options.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster;
+      els.stripScripts.checked = options.stripScripts ?? defaults.stripScripts;
+      els.showOverlay.checked = options.showOverlay ?? defaults.showOverlay;
+      els.fontFallback.checked = options.fontFallback ?? defaults.fontFallback;
+
+      // Load denylist
+      const denylist = options.denylist ?? defaults.denylist;
+      els.denylist.value = Array.isArray(denylist) ? denylist.join('\n') : '';
+
+      // Load theme
+      els.themeAuto.checked = (theme === 'auto');
+      els.themeLight.checked = (theme === 'light');
+      els.themeDark.checked = (theme === 'dark');
+
+      console.log('[GetInspire Options] Settings loaded successfully');
     });
   }
 
-  function save() {
-    const deny = els.denylist.value
-      .split(/\n+/)
-      .map(s => s.trim())
-      .filter(Boolean);
+  // Save settings to storage
+  function saveSettings() {
+    console.log('[GetInspire Options] Saving settings...');
 
-    const getNum = (el, def, mul = 1) => {
-      const n = Number(el.value);
-      return Number.isFinite(n) && n > 0 ? n * mul : def;
+    // Parse denylist
+    const denylistLines = els.denylist.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    // Get number values
+    const getNumber = (element, defaultValue, multiplier = 1) => {
+      const value = Number(element.value);
+      return (Number.isFinite(value) && value > 0) ? value * multiplier : defaultValue;
     };
 
-    const conf = {
-      maxMillis: getNum(els.maxMillis, defaults.maxMillis, 1000),
-      maxAssets: getNum(els.maxAssets, defaults.maxAssets),
-      maxZipMB: getNum(els.maxZipMB, defaults.maxZipMB),
-      concurrency: getNum(els.concurrency, defaults.concurrency),
-      redact: Boolean(els.redact.checked),
-      saveWithoutPrompt: Boolean(els.saveWithoutPrompt.checked),
-      skipVideo: Boolean(els.skipVideo.checked),
-      replaceIframesWithPoster: Boolean(els.replaceIframesWithPoster.checked),
-      stripScripts: Boolean(els.stripScripts.checked),
-      showOverlay: Boolean(els.showOverlay && els.showOverlay.checked),
-      fontFallback: Boolean(els.fontFallback && els.fontFallback.checked),
-      denylist: deny
+    // Build options object
+    const options = {
+      maxMillis: getNumber(els.maxMillis, defaults.maxMillis, 1000), // Convert seconds to ms
+      maxAssets: getNumber(els.maxAssets, defaults.maxAssets),
+      maxZipMB: getNumber(els.maxZipMB, defaults.maxZipMB),
+      concurrency: getNumber(els.concurrency, defaults.concurrency),
+      redact: els.redact.checked,
+      saveWithoutPrompt: els.saveWithoutPrompt.checked,
+      skipVideo: els.skipVideo.checked,
+      replaceIframesWithPoster: els.replaceIframesWithPoster.checked,
+      stripScripts: els.stripScripts.checked,
+      showOverlay: els.showOverlay.checked,
+      fontFallback: els.fontFallback.checked,
+      denylist: denylistLines
     };
 
-    // Persist theme option
+    // Get selected theme
     let theme = 'auto';
-    try {
-      if (els.themeLight?.checked) theme = 'light';
-      else if (els.themeDark?.checked) theme = 'dark';
-      else theme = 'auto';
-    } catch {}
+    if (els.themeLight.checked) theme = 'light';
+    else if (els.themeDark.checked) theme = 'dark';
 
-    chrome.storage.sync.set({ getinspireOptions: conf, getinspireTheme: theme }, () => {
-      els.saved.style.display = 'inline';
-      setTimeout(() => (els.saved.style.display = 'none'), 1000);
-      try { window.getInspireTheme && window.getInspireTheme.set(theme); } catch {}
+    // Save to storage
+    chrome.storage.sync.set({
+      getinspireOptions: options,
+      getinspireTheme: theme
+    }, () => {
+      console.log('[GetInspire Options] Settings saved successfully');
+
+      // Show success message with animation
+      els.saved.classList.add('show');
+      setTimeout(() => {
+        els.saved.classList.remove('show');
+      }, 2000);
+
+      // Update theme immediately
+      if (window.getInspireTheme) {
+        window.getInspireTheme.set(theme);
+      }
     });
   }
 
-  els.saveBtn.addEventListener('click', save);
-  document.addEventListener('DOMContentLoaded', load);
+  // Add preset patterns to denylist
+  function addPreset(patterns) {
+    const currentLines = els.denylist.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
 
-  function addPreset(lines) {
-    const current = els.denylist.value.split(/\n+/).map(s => s.trim()).filter(Boolean);
-    const set = new Set(current);
-    for (const ln of lines) set.add(ln);
-    els.denylist.value = Array.from(set).join('\n');
+    const uniqueLines = new Set([...currentLines, ...patterns]);
+    els.denylist.value = Array.from(uniqueLines).join('\n');
+
+    // Add visual feedback
+    els.denylist.style.borderColor = 'var(--ui-accent)';
+    setTimeout(() => {
+      els.denylist.style.borderColor = '';
+    }, 300);
   }
 
-  // Common presets
-  const presetSocial = [
-    String(/https?:\/\/([^\/]+\.)?(x\.com|twitter\.com)\//i),
-    String(/https?:\/\/([^\/]+\.)?(facebook\.com|instagram\.com|tiktok\.com)\//i),
-    String(/https?:\/\/([^\/]+\.)?(reddit\.com)\//i),
-    String(/https?:\/\/([^\/]+\.)?linkedin\.com\/feed/i),
-    String(/https?:\/\/([^\/]+\.)?pinterest\.[^\/]+\//i),
-    String(/https?:\/\/([^\/]+\.)?tumblr\.com\/dashboard/i),
-  ];
-  const presetSearch = [
-    String(/https?:\/\/(www\.)?google\.[^\/]+\/search/i),
-    String(/https?:\/\/(www\.)?bing\.com\/search/i),
-    String(/https?:\/\/(www\.)?duckduckgo\.com\//i),
-    String(/https?:\/\/(www\.)?yandex\.[^\/]+\/search/i),
-    String(/https?:\/\/(www\.)?baidu\.[^\/]+\/s/i),
-    String(/https?:\/\/news\.google\.com\//i),
+  // Preset patterns
+  const socialPresets = [
+    '/https?:\\/\\/([^\\/]+\\.)?(x\\.com|twitter\\.com)\\//i',
+    '/https?:\\/\\/([^\\/]+\\.)?(facebook\\.com|instagram\\.com|tiktok\\.com)\\//i',
+    '/https?:\\/\\/([^\\/]+\\.)?(reddit\\.com)\\//i',
+    '/https?:\\/\\/([^\\/]+\\.)?linkedin\\.com\\/feed/i',
+    '/https?:\\/\\/([^\\/]+\\.)?pinterest\\.[^\\/]+\\//i',
+    '/https?:\\/\\/([^\\/]+\\.)?tumblr\\.com\\/dashboard/i'
   ];
 
-  if (els.presetSocial) els.presetSocial.addEventListener('click', () => addPreset(presetSocial));
-  if (els.presetSearch) els.presetSearch.addEventListener('click', () => addPreset(presetSearch));
+  const searchPresets = [
+    '/https?:\\/\\/(www\\.)?google\\.[^\\/]+\\/search/i',
+    '/https?:\\/\\/(www\\.)?bing\\.com\\/search/i',
+    '/https?:\\/\\/(www\\.)?duckduckgo\\.com\\//i',
+    '/https?:\\/\\/news\\.google\\.com\\//i'
+  ];
+
+  // Event listeners
+  els.saveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+
+    // Add button feedback
+    els.saveBtn.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+      els.saveBtn.style.transform = '';
+    }, 100);
+
+    saveSettings();
+  });
+
+  if (els.presetSocial) {
+    els.presetSocial.addEventListener('click', () => {
+      addPreset(socialPresets);
+    });
+  }
+
+  if (els.presetSearch) {
+    els.presetSearch.addEventListener('click', () => {
+      addPreset(searchPresets);
+    });
+  }
+
+  // Add micro-interactions for number inputs
+  [els.maxMillis, els.maxAssets, els.maxZipMB, els.concurrency].forEach(input => {
+    if (!input) return;
+
+    input.addEventListener('focus', () => {
+      input.style.borderColor = 'var(--ui-accent)';
+    });
+
+    input.addEventListener('blur', () => {
+      input.style.borderColor = '';
+    });
+
+    input.addEventListener('input', () => {
+      // Validate on input
+      const value = Number(input.value);
+      if (!Number.isFinite(value) || value <= 0) {
+        input.style.borderColor = '#ef4444';
+      } else {
+        input.style.borderColor = 'var(--ui-accent)';
+      }
+    });
+  });
+
+  // Add micro-interactions for textarea
+  if (els.denylist) {
+    els.denylist.addEventListener('focus', () => {
+      els.denylist.style.borderColor = 'var(--ui-accent)';
+    });
+
+    els.denylist.addEventListener('blur', () => {
+      els.denylist.style.borderColor = '';
+    });
+  }
+
+  // Add theme change listeners for immediate feedback
+  [els.themeAuto, els.themeLight, els.themeDark].forEach(radio => {
+    if (!radio) return;
+
+    radio.addEventListener('change', () => {
+      let theme = 'auto';
+      if (els.themeLight.checked) theme = 'light';
+      else if (els.themeDark.checked) theme = 'dark';
+
+      // Apply theme immediately (before save)
+      if (window.getInspireTheme) {
+        window.getInspireTheme.set(theme);
+      }
+    });
+  });
+
+  // Initialize: Load settings when page is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadSettings);
+  } else {
+    loadSettings();
+  }
+
+  console.log('[GetInspire Options] Initialization complete');
 })();

@@ -10,7 +10,8 @@ const pctEl = document.getElementById('pct');
 const countMetaEl = document.getElementById('countMeta');
 const elapsedMetaEl = document.getElementById('elapsedMeta');
 const openOptionsLink = document.getElementById('openOptionsLink');
-const reportLink = document.getElementById('reportLink');
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
 
 // State tracking
 let captureMode = 'single'; // 'single' or 'crawl'
@@ -83,10 +84,16 @@ function resetProgress() {
   startedAt = null;
 }
 
-// Event handlers
+// Event handlers with micro-interactions
 if (startBtn) {
   startBtn.addEventListener('click', async () => {
     console.log('[GetInspire Popup] Start button clicked');
+
+    // Add click animation
+    startBtn.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+      startBtn.style.transform = '';
+    }, 100);
 
     try {
       // Get the active tab
@@ -122,13 +129,22 @@ if (startBtn) {
       resetProgress();
     }
   });
+
+  // Add hover effect
+  startBtn.addEventListener('mouseenter', () => {
+    startBtn.style.transform = 'translateY(-1px)';
+  });
+
+  startBtn.addEventListener('mouseleave', () => {
+    startBtn.style.transform = '';
+  });
 }
 
 if (stopBtn) {
   stopBtn.addEventListener('click', () => {
     console.log('[GetInspire Popup] Stop button clicked');
     setStatus('Stopping...');
-    // TODO: Implement stop functionality
+    chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
   });
 }
 
@@ -136,22 +152,28 @@ if (openOptionsLink) {
   openOptionsLink.addEventListener('click', (e) => {
     e.preventDefault();
     console.log('[GetInspire Popup] Opening options');
+
+    // Add click animation
+    openOptionsLink.style.transform = 'rotate(90deg) scale(0.9)';
+    setTimeout(() => {
+      openOptionsLink.style.transform = '';
+    }, 200);
+
     chrome.windows.create({
       url: 'src/options.html',
       type: 'popup',
-      width: 800,
-      height: 600
+      width: 900,
+      height: 700
     });
   });
-}
 
-if (reportLink) {
-  reportLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    console.log('[GetInspire Popup] Opening issue reporter');
-    chrome.tabs.create({
-      url: 'https://github.com/vikast908/GetInspire/issues'
-    });
+  // Add hover effect
+  openOptionsLink.addEventListener('mouseenter', () => {
+    openOptionsLink.style.transform = 'rotate(45deg)';
+  });
+
+  openOptionsLink.addEventListener('mouseleave', () => {
+    openOptionsLink.style.transform = '';
   });
 }
 
@@ -175,6 +197,74 @@ chrome.runtime.onMessage.addListener((message) => {
     setProgress(100, 100);
   }
 });
+
+// Theme management
+let currentTheme = 'auto';
+
+// Update theme icon based on current theme
+function updateThemeIcon(theme) {
+  const sunIcon = `<circle cx="12" cy="12" r="5"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>`;
+  const moonIcon = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
+  const autoIcon = `<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/>`;
+
+  if (theme === 'light') {
+    themeIcon.innerHTML = sunIcon;
+    themeToggle.title = 'Switch to Dark Theme';
+  } else if (theme === 'dark') {
+    themeIcon.innerHTML = moonIcon;
+    themeToggle.title = 'Switch to Auto Theme';
+  } else {
+    themeIcon.innerHTML = autoIcon;
+    themeToggle.title = 'Switch to Light Theme';
+  }
+}
+
+// Apply theme to popup
+function applyTheme(theme) {
+  currentTheme = theme;
+  const html = document.documentElement;
+
+  // Remove existing theme attributes
+  html.removeAttribute('data-theme');
+
+  if (theme === 'light') {
+    html.setAttribute('data-theme', 'light');
+  } else if (theme === 'dark') {
+    html.setAttribute('data-theme', 'dark');
+  }
+  // For 'auto', we don't set data-theme, so it uses system preference
+
+  updateThemeIcon(theme);
+
+  // Save theme
+  chrome.storage.sync.set({ getinspireTheme: theme });
+}
+
+// Cycle through themes: auto -> light -> dark -> auto
+function cycleTheme() {
+  const nextTheme = currentTheme === 'auto' ? 'light' : (currentTheme === 'light' ? 'dark' : 'auto');
+  applyTheme(nextTheme);
+
+  // Add animation feedback
+  themeToggle.style.transform = 'rotate(180deg)';
+  setTimeout(() => {
+    themeToggle.style.transform = '';
+  }, 300);
+}
+
+// Load initial theme
+chrome.storage.sync.get(['getinspireTheme'], (result) => {
+  const theme = result.getinspireTheme || 'auto';
+  applyTheme(theme);
+});
+
+// Theme toggle event
+if (themeToggle) {
+  themeToggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    cycleTheme();
+  });
+}
 
 // Initialize UI
 resetProgress();

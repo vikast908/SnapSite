@@ -5,7 +5,12 @@
       "Bash(python:*)",
       "Bash(start:*)",
       "Bash(node:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(for f in src/*.js)",
+      "Bash(do node -c \"$f\")",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(do echo \"Checking $f...\")"
     ],
     "deny": [],
     "ask": []
