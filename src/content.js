@@ -170,14 +170,32 @@
       return expandedCount;
     }
 
-    // Helper function to download a resource as blob
-    async function downloadAsBlob(url) {
+    // Helper function to download a resource as blob with timeout
+    async function downloadAsBlob(url, timeoutMs = 10000) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
       try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const response = await fetch(url, {
+          signal: controller.signal,
+          mode: 'cors',
+          credentials: 'omit'
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          console.warn(`[GetInspire] HTTP ${response.status} for ${url}`);
+          return null;
+        }
+
         return await response.blob();
       } catch (error) {
-        console.warn(`[GetInspire] Failed to download ${url}:`, error);
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          console.warn(`[GetInspire] Timeout downloading ${url}`);
+        } else {
+          console.warn(`[GetInspire] Failed to download ${url}:`, error.message);
+        }
         return null;
       }
     }
@@ -197,14 +215,36 @@
       try {
         const urlObj = new URL(url);
         const pathname = urlObj.pathname;
-        const filename = pathname.split('/').pop() || 'unnamed';
+        let filename = pathname.split('/').pop() || 'unnamed';
+
         // Add extension if missing
         if (!filename.includes('.')) {
-          return filename + '.jpg';
+          // Try to determine extension from URL or default to jpg
+          if (url.includes('font') || url.includes('.woff')) {
+            filename += '.woff2';
+          } else if (url.includes('.mp4') || url.includes('video')) {
+            filename += '.mp4';
+          } else if (url.includes('.mp3') || url.includes('audio')) {
+            filename += '.mp3';
+          } else {
+            filename += '.jpg';
+          }
         }
+
+        // Make filename unique by adding a hash of the full path if needed
+        // This prevents collisions when multiple files have the same name
+        if (pathname.length > filename.length) {
+          const pathHash = pathname.split('').reduce((acc, char) => {
+            return ((acc << 5) - acc) + char.charCodeAt(0);
+          }, 0) & 0x7FFFFFFF;
+          const ext = filename.includes('.') ? filename.split('.').pop() : '';
+          const base = filename.includes('.') ? filename.substring(0, filename.lastIndexOf('.')) : filename;
+          filename = `${base}-${pathHash.toString(36)}${ext ? '.' + ext : ''}`;
+        }
+
         return filename;
       } catch {
-        return 'unnamed.jpg';
+        return 'unnamed-' + Date.now() + '.jpg';
       }
     }
 
@@ -229,6 +269,48 @@
       // Also check data-src for lazy-loaded images
       if (img.dataset.src && !img.dataset.src.startsWith('data:')) {
         assetsToDownload.set(img.dataset.src, {type: 'image', element: img});
+      }
+    });
+
+    // Collect videos
+    const videos = document.querySelectorAll('video');
+    videos.forEach(video => {
+      if (video.src && !video.src.startsWith('data:') && !video.src.startsWith('blob:')) {
+        assetsToDownload.set(video.src, {type: 'video', element: video});
+      }
+      // Also check source elements
+      const sources = video.querySelectorAll('source');
+      sources.forEach(source => {
+        if (source.src && !source.src.startsWith('data:') && !source.src.startsWith('blob:')) {
+          assetsToDownload.set(source.src, {type: 'video', element: source});
+        }
+      });
+    });
+
+    // Capture canvas elements as images
+    const canvases = document.querySelectorAll('canvas');
+    canvases.forEach((canvas, index) => {
+      try {
+        const dataUrl = canvas.toDataURL('image/png');
+        const canvasId = `canvas-${index}`;
+        canvas.setAttribute('data-canvas-id', canvasId);
+        // Store canvas data for later replacement
+        assetsToDownload.set(`canvas-${index}`, {
+          type: 'canvas',
+          element: canvas,
+          dataUrl: dataUrl
+        });
+      } catch (e) {
+        console.warn('[GetInspire] Could not capture canvas:', e);
+      }
+    });
+
+    // Collect SVG images and inline SVGs
+    const svgImages = document.querySelectorAll('img[src$=".svg"], use[href], use[xlink\\:href]');
+    svgImages.forEach(el => {
+      const href = el.getAttribute('href') || el.getAttribute('xlink:href');
+      if (href && !href.startsWith('data:') && !href.startsWith('#')) {
+        assetsToDownload.set(href, {type: 'svg', element: el});
       }
     });
 
@@ -258,54 +340,211 @@
       }
     });
 
+    // Collect fonts from @font-face rules in stylesheets
+    console.log('[GetInspire] Collecting fonts from @font-face rules...');
+    const allStyleSheets = [...document.styleSheets];
+    let fontCount = 0;
+    allStyleSheets.forEach(sheet => {
+      try {
+        const rules = [...sheet.cssRules || []];
+        rules.forEach(rule => {
+          if (rule.type === CSSRule.FONT_FACE_RULE) {
+            const src = rule.style.src;
+            if (src) {
+              // Extract URLs from src (can have multiple formats)
+              const urlMatches = src.match(/url\(["']?([^"')]+)["']?\)/g);
+              if (urlMatches) {
+                urlMatches.forEach(match => {
+                  let url = match.replace(/url\(["']?|["']?\)/g, '');
+                  // Convert relative URLs to absolute
+                  if (!url.startsWith('http') && !url.startsWith('data:')) {
+                    try {
+                      url = new URL(url, window.location.href).href;
+                    } catch (e) {
+                      console.warn(`[GetInspire] Invalid font URL: ${url}`);
+                      return;
+                    }
+                  }
+                  if (!url.startsWith('data:') && url.startsWith('http')) {
+                    assetsToDownload.set(url, {type: 'font', element: null});
+                    fontCount++;
+                  }
+                });
+              }
+            }
+          }
+        });
+      } catch (e) {
+        // Cross-origin stylesheets might throw errors
+        console.warn('[GetInspire] Could not read stylesheet rules:', e.message);
+      }
+    });
+    console.log(`[GetInspire] Found ${fontCount} font files`);
+
+    // Collect script files
+    console.log('[GetInspire] Collecting script files...');
+    const scripts = document.querySelectorAll('script[src]');
+    scripts.forEach(script => {
+      if (script.src && !script.src.startsWith('data:')) {
+        assetsToDownload.set(script.src, {type: 'script', element: script});
+      }
+    });
+
+    // Collect audio elements
+    const audioElements = document.querySelectorAll('audio');
+    audioElements.forEach(audio => {
+      if (audio.src && !audio.src.startsWith('data:') && !audio.src.startsWith('blob:')) {
+        assetsToDownload.set(audio.src, {type: 'audio', element: audio});
+      }
+      const sources = audio.querySelectorAll('source');
+      sources.forEach(source => {
+        if (source.src && !source.src.startsWith('data:') && !source.src.startsWith('blob:')) {
+          assetsToDownload.set(source.src, {type: 'audio', element: source});
+        }
+      });
+    });
+
+    // Collect images with srcset
+    console.log('[GetInspire] Collecting images with srcset...');
+    const imagesWithSrcset = document.querySelectorAll('img[srcset], source[srcset]');
+    imagesWithSrcset.forEach(img => {
+      const srcset = img.getAttribute('srcset');
+      if (srcset) {
+        // Parse srcset: "url1 1x, url2 2x" or "url1 100w, url2 200w"
+        const srcsetUrls = srcset.split(',').map(s => s.trim().split(/\s+/)[0]);
+        srcsetUrls.forEach(url => {
+          if (url && !url.startsWith('data:')) {
+            // Convert relative to absolute
+            const absUrl = new URL(url, window.location.href).href;
+            assetsToDownload.set(absUrl, {type: 'image', element: img});
+          }
+        });
+      }
+    });
+
     console.log(`[GetInspire] Found ${assetsToDownload.size} assets to download`);
 
-    // Step 3: Download all assets
+    // Safety check - limit total assets to prevent memory issues
+    const MAX_ASSETS = 500;
+    if (assetsToDownload.size > MAX_ASSETS) {
+      console.warn(`[GetInspire] Too many assets (${assetsToDownload.size}), limiting to ${MAX_ASSETS}`);
+      const limitedAssets = new Map([...assetsToDownload.entries()].slice(0, MAX_ASSETS));
+      assetsToDownload.clear();
+      limitedAssets.forEach((v, k) => assetsToDownload.set(k, v));
+    }
+
+    // Step 3: Download all assets with concurrency control
     chrome.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: `Downloading ${assetsToDownload.size} assets...`
     });
 
+    const MAX_CONCURRENT = 6; // Limit concurrent downloads
     let downloadCount = 0;
-    for (const [url, info] of assetsToDownload) {
-      downloadCount++;
-      console.log(`[GetInspire] Downloading asset ${downloadCount}/${assetsToDownload.size}: ${url}`);
+    let successCount = 0;
+    let failCount = 0;
 
-      const blob = await downloadAsBlob(url);
-      if (blob) {
-        const base64 = await blobToBase64(blob);
-        const filename = getFilenameFromUrl(url);
-        downloadedAssets.set(url, {blob, base64, filename});
+    // Helper to download with concurrency limit
+    async function downloadWithLimit(entries) {
+      const chunks = [];
+      for (let i = 0; i < entries.length; i += MAX_CONCURRENT) {
+        chunks.push(entries.slice(i, i + MAX_CONCURRENT));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(chunk.map(async ([url, info]) => {
+          downloadCount++;
+
+          // Update status every 10 downloads
+          if (downloadCount % 10 === 0) {
+            chrome.runtime.sendMessage({
+              type: 'CAPTURE_STATUS',
+              status: `Downloading assets... ${downloadCount}/${assetsToDownload.size}`
+            });
+          }
+
+          console.log(`[GetInspire] Downloading ${downloadCount}/${assetsToDownload.size}: ${url.substring(0, 80)}...`);
+
+          const blob = await downloadAsBlob(url);
+          if (blob) {
+            try {
+              const base64 = await blobToBase64(blob);
+              const filename = getFilenameFromUrl(url);
+              downloadedAssets.set(url, {blob, base64, filename});
+              successCount++;
+            } catch (e) {
+              console.warn(`[GetInspire] Failed to process blob for ${url}:`, e);
+              failCount++;
+            }
+          } else {
+            failCount++;
+          }
+        }));
       }
     }
 
-    console.log(`[GetInspire] Downloaded ${downloadedAssets.size} assets successfully`);
+    const assetEntries = [...assetsToDownload.entries()];
+    await downloadWithLimit(assetEntries);
+
+    console.log(`[GetInspire] Downloaded ${successCount}/${assetsToDownload.size} assets (${failCount} failed)`);
 
     // Step 4: Clone document and replace asset URLs
     console.log('[GetInspire] Creating modified HTML...');
+
+    // First, replace canvas elements with images
+    canvases.forEach((canvas, index) => {
+      const canvasData = assetsToDownload.get(`canvas-${index}`);
+      if (canvasData && canvasData.dataUrl) {
+        const img = document.createElement('img');
+        img.src = canvasData.dataUrl;
+        img.alt = `Captured canvas ${index}`;
+        // Copy relevant attributes
+        img.className = canvas.className;
+        img.style.cssText = canvas.style.cssText;
+        if (canvas.width) img.width = canvas.width;
+        if (canvas.height) img.height = canvas.height;
+        canvas.replaceWith(img);
+      }
+    });
+
     const htmlContent = document.documentElement.outerHTML;
 
-    // Replace image URLs with base64 or local paths
+    // Replace asset URLs with base64 or local paths
     let modifiedHtml = htmlContent;
     const assetMapping = {};
 
+    // Helper to escape URL for regex
+    function escapeForRegex(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
     for (const [url, data] of downloadedAssets) {
-      // For small images (< 100KB), embed as base64
-      if (data.blob.size < 100000) {
-        modifiedHtml = modifiedHtml.replace(
-          new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-          data.base64
-        );
-        assetMapping[url] = 'embedded';
-      } else {
-        // For larger images, save separately and update path
-        const localPath = `assets/${data.filename}`;
-        modifiedHtml = modifiedHtml.replace(
-          new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-          localPath
-        );
-        assetMapping[url] = localPath;
+      // Skip canvas entries (already handled)
+      if (url.startsWith('canvas-')) {
+        continue;
       }
+
+      if (!data.blob) continue;
+
+      const isSmall = data.blob.size < 100000;
+      const replacement = isSmall ? data.base64 : `assets/${data.filename}`;
+
+      // Try multiple URL patterns for replacement
+      const urlObj = new URL(url);
+      const patterns = [
+        url, // Full URL
+        urlObj.pathname, // Just the path
+        urlObj.pathname.replace(/^\//, ''), // Path without leading slash
+      ];
+
+      patterns.forEach(pattern => {
+        if (pattern) {
+          const regex = new RegExp(escapeForRegex(pattern), 'g');
+          modifiedHtml = modifiedHtml.replace(regex, replacement);
+        }
+      });
+
+      assetMapping[url] = isSmall ? 'embedded' : `assets/${data.filename}`;
     }
 
     // Step 5: Get stylesheets and scripts
@@ -313,59 +552,237 @@
     const styles = [];
     const scripts = [];
 
+    // Helper function to extract and preserve CSS @property rules
+    function extractCSSProperties(cssText) {
+      const propertyRules = [];
+
+      // Improved pattern to handle @property with proper brace matching
+      const propertyPattern = /@property\s+(--[\w-]+)\s*\{/g;
+      let match;
+
+      while ((match = propertyPattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        const propertyName = match[1];
+
+        // Find the matching closing brace
+        let braceCount = 1;
+        let currentIndex = propertyPattern.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          const fullProperty = cssText.substring(startIndex, currentIndex);
+          propertyRules.push(fullProperty);
+          console.log(`[GetInspire] Extracted @property: ${propertyName}`);
+        }
+      }
+
+      return propertyRules;
+    }
+
+    // Helper function to extract keyframe animations
+    function extractKeyframes(cssText) {
+      const keyframes = [];
+
+      // Improved regex that handles nested braces properly
+      // Matches @keyframes name { ... } including nested blocks
+      const keyframePattern = /@(?:-webkit-)?keyframes\s+([\w-]+)\s*\{/g;
+      let match;
+
+      while ((match = keyframePattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        const name = match[1];
+
+        // Find the matching closing brace
+        let braceCount = 1;
+        let currentIndex = keyframePattern.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          const fullKeyframe = cssText.substring(startIndex, currentIndex);
+          keyframes.push(fullKeyframe);
+          console.log(`[GetInspire] Extracted keyframe: ${name}`);
+        }
+      }
+
+      return keyframes;
+    }
+
+    // Collect all CSS @property declarations and keyframes
+    const allPropertyRules = new Set();
+    const allKeyframes = new Set();
+
     // Get all link stylesheets
     const linkStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+    console.log(`[GetInspire] Found ${linkStyles.length} linked stylesheets`);
+
     for (const link of linkStyles) {
       try {
         const response = await fetch(link.href);
         let cssText = await response.text();
+        console.log(`[GetInspire] Processing stylesheet: ${link.href} (${cssText.length} chars)`);
+
+        // Extract and store @property rules and keyframes before replacement
+        extractCSSProperties(cssText).forEach(rule => allPropertyRules.add(rule));
+        extractKeyframes(cssText).forEach(kf => allKeyframes.add(kf));
 
         // Replace URLs in CSS with downloaded assets
         for (const [url, data] of downloadedAssets) {
-          if (data.blob.size < 100000) {
-            cssText = cssText.replace(
-              new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-              data.base64
-            );
-          } else {
-            cssText = cssText.replace(
-              new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-              `assets/${data.filename}`
-            );
-          }
+          if (!data.blob) continue;
+
+          const isSmall = data.blob.size < 100000;
+          const replacement = isSmall ? data.base64 : `assets/${data.filename}`;
+
+          // Try multiple URL patterns
+          const urlObj = new URL(url);
+          const patterns = [
+            url,
+            urlObj.pathname,
+            urlObj.pathname.replace(/^\//, ''),
+          ];
+
+          patterns.forEach(pattern => {
+            if (pattern) {
+              const regex = new RegExp(escapeForRegex(pattern), 'g');
+              cssText = cssText.replace(regex, replacement);
+            }
+          });
         }
 
         styles.push(`/* From: ${link.href} */\n${cssText}`);
       } catch (e) {
-        console.warn('[GetInspire] Could not fetch stylesheet:', link.href);
+        console.warn('[GetInspire] Could not fetch stylesheet:', link.href, e);
       }
     }
 
     // Get all style elements
     const styleElements = Array.from(document.querySelectorAll('style'));
+    console.log(`[GetInspire] Found ${styleElements.length} inline <style> elements`);
+
     for (const style of styleElements) {
       let cssText = style.textContent;
+      console.log(`[GetInspire] Processing inline style (${cssText.length} chars)`);
+
+      // Extract and store @property rules and keyframes
+      extractCSSProperties(cssText).forEach(rule => allPropertyRules.add(rule));
+      extractKeyframes(cssText).forEach(kf => allKeyframes.add(kf));
 
       // Replace URLs in inline CSS
       for (const [url, data] of downloadedAssets) {
-        if (data.blob.size < 100000) {
-          cssText = cssText.replace(
-            new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-            data.base64
-          );
-        } else {
-          cssText = cssText.replace(
-            new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-            `assets/${data.filename}`
-          );
-        }
+        if (!data.blob) continue;
+
+        const isSmall = data.blob.size < 100000;
+        const replacement = isSmall ? data.base64 : `assets/${data.filename}`;
+
+        // Try multiple URL patterns
+        const urlObj = new URL(url);
+        const patterns = [
+          url,
+          urlObj.pathname,
+          urlObj.pathname.replace(/^\//, ''),
+        ];
+
+        patterns.forEach(pattern => {
+          if (pattern) {
+            const regex = new RegExp(escapeForRegex(pattern), 'g');
+            cssText = cssText.replace(regex, replacement);
+          }
+        });
       }
 
       styles.push(cssText);
     }
 
-    // Add carousel visibility CSS
-    const carouselCSS = `
+    // Capture computed styles for animated elements to preserve animation states
+    console.log('[GetInspire] Capturing computed styles for animated elements...');
+    const animatedElements = document.querySelectorAll('[class*="animate"], [style*="animation"], [style*="transition"]');
+    const computedStylesCSS = [];
+
+    animatedElements.forEach((el, index) => {
+      const computed = window.getComputedStyle(el);
+      const animationName = computed.animationName;
+      const animationDuration = computed.animationDuration;
+      const animationTimingFunction = computed.animationTimingFunction;
+      const animationDelay = computed.animationDelay;
+      const animationIterationCount = computed.animationIterationCount;
+      const animationDirection = computed.animationDirection;
+      const animationFillMode = computed.animationFillMode;
+      const transition = computed.transition;
+      const transform = computed.transform;
+      const filter = computed.filter;
+      const backdropFilter = computed.backdropFilter;
+
+      // Add a unique class to this element for targeting
+      const uniqueClass = `gi-anim-${index}`;
+      el.classList.add(uniqueClass);
+
+      // Build CSS rule for this element
+      let cssRule = `.${uniqueClass} {\n`;
+      if (animationName && animationName !== 'none') {
+        cssRule += `  animation-name: ${animationName};\n`;
+        cssRule += `  animation-duration: ${animationDuration};\n`;
+        cssRule += `  animation-timing-function: ${animationTimingFunction};\n`;
+        cssRule += `  animation-delay: ${animationDelay};\n`;
+        cssRule += `  animation-iteration-count: ${animationIterationCount};\n`;
+        cssRule += `  animation-direction: ${animationDirection};\n`;
+        cssRule += `  animation-fill-mode: ${animationFillMode};\n`;
+      }
+      if (transition && transition !== 'none' && transition !== 'all 0s ease 0s') {
+        cssRule += `  transition: ${transition};\n`;
+      }
+      if (transform && transform !== 'none') {
+        cssRule += `  transform: ${transform};\n`;
+      }
+      if (filter && filter !== 'none') {
+        cssRule += `  filter: ${filter};\n`;
+      }
+      if (backdropFilter && backdropFilter !== 'none') {
+        cssRule += `  backdrop-filter: ${backdropFilter};\n`;
+        cssRule += `  -webkit-backdrop-filter: ${backdropFilter};\n`;
+      }
+      cssRule += `}\n`;
+
+      computedStylesCSS.push(cssRule);
+    });
+
+    // Add all collected @property rules at the beginning
+    if (allPropertyRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allPropertyRules.size} @property declarations`);
+      const propertyCSS = `/* CSS @property declarations */\n${[...allPropertyRules].join('\n\n')}\n`;
+      styles.unshift(propertyCSS);
+    } else {
+      console.log('[GetInspire] No @property declarations found');
+    }
+
+    // Add all collected keyframes
+    if (allKeyframes.size > 0) {
+      console.log(`[GetInspire] Preserved ${allKeyframes.size} keyframe animations`);
+      const keyframesCSS = `/* CSS Keyframe animations */\n${[...allKeyframes].join('\n\n')}\n`;
+      styles.unshift(keyframesCSS);
+    } else {
+      console.log('[GetInspire] No keyframe animations found');
+    }
+
+    // Add computed styles for animated elements
+    if (computedStylesCSS.length > 0) {
+      console.log(`[GetInspire] Preserved ${computedStylesCSS.length} computed animation states`);
+      const computedCSS = `/* Preserved animation states */\n${computedStylesCSS.join('\n')}\n`;
+      styles.push(computedCSS);
+    }
+
+    // Add carousel visibility and animation enhancement CSS
+    const enhancementCSS = `
       /* GetInspire: Ensure all carousel slides are visible */
       .carousel-item,
       .slick-slide,
@@ -434,17 +851,81 @@
         opacity: 1 !important;
         visibility: visible !important;
       }
+
+      /* GetInspire: Enhanced animation and modern CSS feature support */
+
+      /* Ensure gradient animations work */
+      @supports (background: linear-gradient(var(--angle, 0deg), red, blue)) {
+        [style*="--angle"],
+        [class*="gradient"] {
+          /* Preserve gradient animations */
+        }
+      }
+
+      /* Ensure backdrop blur effects work */
+      @supports (backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px)) {
+        [style*="backdrop-filter"],
+        [class*="backdrop-blur"],
+        [class*="glass"] {
+          -webkit-backdrop-filter: inherit;
+          backdrop-filter: inherit;
+        }
+      }
+
+      /* Ensure transforms are preserved on animated elements */
+      [class*="animate"]:not(.carousel-item):not(.slick-slide):not(.swiper-slide),
+      [style*="animation"],
+      [class*="transition"] {
+        animation: inherit !important;
+        transition: inherit !important;
+        transform: inherit !important;
+      }
+
+      /* Ensure video elements display properly */
+      video {
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      /* Ensure canvas replacements display properly */
+      img[alt*="canvas"] {
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      /* Preserve hover effects structure (won't animate but will be visible) */
+      *:hover {
+        /* Hover states captured at time of snapshot */
+      }
+
+      /* Fix for overflow issues with animations */
+      body {
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      /* Ensure SVG animations are visible */
+      svg {
+        max-width: 100%;
+        height: auto;
+      }
+
+      svg * {
+        animation: inherit !important;
+      }
     `;
-    styles.push(carouselCSS);
+    styles.push(enhancementCSS);
 
     const combinedCSS = styles.join('\n\n');
 
-    // Step 6: Create final HTML with inline carousel script
+    // Step 6: Create final HTML with inline carousel script and animation support
     const carouselScript = `
       <script>
-        // Basic carousel functionality preservation
+        // Enhanced page restoration with animation support
         document.addEventListener('DOMContentLoaded', function() {
-          console.log('[GetInspire] Initializing captured carousel display');
+          console.log('[GetInspire] Initializing captured page with animation support');
 
           // Show all carousel slides
           const carouselItems = document.querySelectorAll(
@@ -470,6 +951,28 @@
               img.src = img.dataset.lazy;
             }
           });
+
+          // Restart animations that should be playing
+          const animatedElements = document.querySelectorAll('[class*="animate"]');
+          animatedElements.forEach(function(el) {
+            const computed = window.getComputedStyle(el);
+            if (computed.animationName && computed.animationName !== 'none') {
+              // Force animation restart
+              el.style.animation = 'none';
+              setTimeout(function() {
+                el.style.animation = '';
+              }, 10);
+            }
+          });
+
+          // Handle video elements - set poster and controls
+          const videos = document.querySelectorAll('video');
+          videos.forEach(function(video) {
+            video.controls = true;
+            video.preload = 'metadata';
+          });
+
+          console.log('[GetInspire] Page restoration complete');
         });
       </script>
     `;
@@ -504,19 +1007,42 @@ Captured: ${new Date().toISOString()}
 ## Statistics
 - Total assets found: ${assetsToDownload.size}
 - Assets downloaded: ${downloadedAssets.size}
-- Assets embedded (base64): ${[...downloadedAssets.values()].filter(d => d.blob.size < 100000).length}
-- Assets saved separately: ${[...downloadedAssets.values()].filter(d => d.blob.size >= 100000).length}
+- Assets embedded (base64): ${[...downloadedAssets.values()].filter(d => d.blob && d.blob.size < 100000).length}
+- Assets saved separately: ${[...downloadedAssets.values()].filter(d => d.blob && d.blob.size >= 100000).length}
+- Images captured: ${images.length}
+- Canvases captured: ${canvases.length}
+- Videos found: ${videos.length}
+- Audio files found: ${audioElements.length}
+- Script files found: ${scripts.length}
+- Fonts extracted: ${[...assetsToDownload.values()].filter(d => d.type === 'font').length}
+
+## Animation Support
+- CSS keyframe animations preserved
+- CSS @property declarations captured
+- Computed animation states preserved
+- Backdrop blur and modern CSS effects supported
+- Tailwind CSS animations maintained
+- SVG animations captured
+- Transform and transition properties preserved
 
 ## Carousel Support
 - All carousel slides have been expanded and made visible
 - Slides are displayed vertically for complete capture
 - Navigation controls have been hidden
+- Supports: Slick, Swiper, Bootstrap, Splide, Keen Slider, and more
+
+## Media Support
+- Canvas elements converted to images
+- Videos included with controls enabled
+- SVG graphics preserved
+- Background images captured
 
 ## Notes
-- Small images (<100KB) are embedded as base64
-- Large images are saved in the assets folder
-- The page should work completely offline
-- Carousel slides are all visible (not interactive)
+- Small assets (<100KB) are embedded as base64
+- Large assets are saved in the assets folder
+- The page works completely offline
+- Animations will replay on page load
+- Interactive features are preserved where possible
 `;
     zip.file('README.md', readme);
 

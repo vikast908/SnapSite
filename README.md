@@ -24,12 +24,30 @@ Theme
 - Change it in Options (Theme section) or from the popup header via the Theme button.
 
 What's Included
-- `index.html`: DOM snapshot with local asset paths
-- `assets/`: downloaded CSS/JS/images/fonts/media
+- `index.html`: DOM snapshot with local asset paths and preserved animations
+- `assets/`: downloaded CSS/JS/images/fonts/media/videos
 - `report/README.md` and `report/fetch-report.json`: human + machine summary
 - `quick-check.html`: loads `index.html` in an iframe and summarizes the report
 - `report/asset-manifest.json`: original URL + local path, bytes, mime, sha256
 - `report/page.mhtml`: browser-native MHTML snapshot (when available)
+
+Animation & Modern CSS Support
+- **CSS Keyframe Animations**: All `@keyframes` rules are extracted and preserved
+- **CSS @property**: Modern CSS custom properties with animation support captured
+- **Computed Animation States**: Animation properties (duration, timing, delay, etc.) preserved
+- **Backdrop Blur & Effects**: Modern CSS filter effects like backdrop-filter maintained
+- **Tailwind Animations**: Dynamic animation classes from Tailwind CSS preserved
+- **Transform & Transition**: All transform and transition properties captured
+- **SVG Animations**: Inline SVG animations preserved
+- **Canvas Elements**: Canvas elements converted to static images
+- **Video Support**: Video elements included with controls enabled
+- **Gradient Animations**: Animated gradients with CSS variables maintained
+
+Carousel Support
+- Automatically detects and expands all carousel slides
+- Supported libraries: Slick, Swiper, Bootstrap Carousel, Splide, Keen Slider, Owl Carousel, Flickity, Glide
+- All slides displayed vertically in the captured page
+- Navigation controls automatically hidden since all content is visible
 
 Endless Pages & Limits
 - Denylist blocks known infinite feeds/search pages

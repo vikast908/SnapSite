@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GetInspire Test Page</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      margin: 0 0 20px 0;
+      font-size: 2.5em;
+    }
+    p {
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+    .status {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    li:last-child {
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎯 GetInspire Test Page</h1>
+    <p>This is a simple test page to verify that GetInspire is working correctly.</p>
+
+    <div class="status">
+      <h2>✅ Test Instructions:</h2>
+      <ul>
+        <li>1. Open this page in Chrome/Edge</li>
+        <li>2. Click the GetInspire extension icon</li>
+        <li>3. Click "This page" button</li>
+        <li>4. Wait for the capture to complete</li>
+        <li>5. Check your downloads folder for the ZIP file</li>
+      </ul>
+    </div>
+
+    <p><strong>Page Info:</strong></p>
+    <ul>
+      <li>URL: <span id="url"></span></li>
+      <li>Title: <span id="title"></span></li>
+      <li>Time: <span id="time"></span></li>
+    </ul>
+  </div>
+
+  <script>
+    document.getElementById('url').textContent = window.location.href;
+    document.getElementById('title').textContent = document.title;
+    document.getElementById('time').textContent = new Date().toLocaleString();
+  </script>
+</body>
+</html>

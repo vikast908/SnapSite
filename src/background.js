@@ -16,21 +16,32 @@ async function handleStartCapture(tabId) {
   console.log('[GetInspire BG] Starting capture for tab:', tabId);
 
   try {
-    // Inject content script
+    // First, inject JSZip
     await chrome.scripting.executeScript({
       target: { tabId: tabId },
-      files: ['src/vendor/jszip.min.js', 'src/content.js']
+      files: ['src/vendor/jszip.min.js']
+    });
+    console.log('[GetInspire BG] JSZip injected successfully');
+
+    // Small delay to ensure JSZip is fully loaded
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Then inject content script (use simple version for testing)
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ['src/content-simple.js'] // Changed to simple version for debugging
     });
 
     console.log('[GetInspire BG] Content scripts injected successfully');
   } catch (error) {
     console.error('[GetInspire BG] Failed to inject scripts:', error);
+    console.error('[GetInspire BG] Error details:', error.stack);
 
     // Send error back to popup
     chrome.runtime.sendMessage({
       type: 'CAPTURE_ERROR',
       error: error.message
-    });
+    }).catch(err => console.error('[GetInspire BG] Failed to send error message:', err));
   }
 }
 

@@ -110,18 +110,25 @@ if (startBtn) {
         throw new Error('Cannot capture browser pages');
       }
 
+      // Check for other special URLs
+      if (tab.url.startsWith('edge://') || tab.url.startsWith('about:') || !tab.url.startsWith('http')) {
+        throw new Error('Cannot capture this type of page. Please navigate to a regular website.');
+      }
+
       // Start capture
       startedAt = Date.now();
       setStatus('Starting capture...');
-      setProgress(0, 1);
+      setProgress(10, 100);
 
       // Send message to background script to start capture
-      chrome.runtime.sendMessage({
+      const response = await chrome.runtime.sendMessage({
         type: 'START_CAPTURE',
         tabId: tab.id
       });
 
-      setStatus('Capture in progress...');
+      console.log('[GetInspire Popup] Message sent, response:', response);
+      setStatus('Injecting scripts...');
+      setProgress(20, 100);
 
     } catch (error) {
       console.error('[GetInspire Popup] Error:', error);
@@ -178,24 +185,51 @@ if (openOptionsLink) {
 }
 
 // Listen for messages from background/content scripts
-chrome.runtime.onMessage.addListener((message) => {
-  console.log('[GetInspire Popup] Received message:', message);
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[GetInspire Popup] Received message:', message, 'from:', sender);
 
-  if (message.type === 'CAPTURE_STATUS') {
-    setStatus(message.status || 'Processing...');
-    if (message.progress) {
-      setProgress(message.progress.done, message.progress.total);
+  try {
+    if (message.type === 'CAPTURE_STATUS') {
+      const status = message.status || 'Processing...';
+      setStatus(status);
+
+      // Update progress based on status text
+      if (status.includes('Starting')) {
+        setProgress(25, 100);
+      } else if (status.includes('ZIP')) {
+        setProgress(50, 100);
+      } else if (status.includes('Generating')) {
+        setProgress(75, 100);
+      } else if (status.includes('download')) {
+        setProgress(90, 100);
+      }
+
+      if (message.progress) {
+        setProgress(message.progress.done, message.progress.total);
+      }
+    } else if (message.type === 'CAPTURE_ERROR') {
+      console.error('[GetInspire Popup] Capture error:', message.error);
+      setStatus('Error: ' + (message.error || 'Unknown error'));
+      resetProgress();
+
+      // Show alert for critical errors
+      if (message.error && message.error.length < 100) {
+        setTimeout(() => alert('Capture failed: ' + message.error), 100);
+      }
+    } else if (message.type === 'DOWNLOAD_SUCCESS') {
+      setStatus('Download completed!');
+      setProgress(100, 100);
+    } else if (message.type === 'CAPTURE_COMPLETE') {
+      setStatus('Capture completed!');
+      setProgress(100, 100);
     }
-  } else if (message.type === 'CAPTURE_ERROR') {
-    setStatus('Error: ' + (message.error || 'Unknown error'));
-    resetProgress();
-  } else if (message.type === 'DOWNLOAD_SUCCESS') {
-    setStatus('Download completed!');
-    setProgress(100, 100);
-  } else if (message.type === 'CAPTURE_COMPLETE') {
-    setStatus('Capture completed!');
-    setProgress(100, 100);
+  } catch (error) {
+    console.error('[GetInspire Popup] Error handling message:', error);
   }
+
+  // Always send a response to avoid "message port closed" errors
+  sendResponse({ received: true });
+  return true; // Keep channel open for async responses
 });
 
 // Theme management

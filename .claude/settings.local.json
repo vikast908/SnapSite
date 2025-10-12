@@ -10,7 +10,11 @@
       "Bash(do node -c \"$f\")",
       "Bash(echo:*)",
       "Bash(done)",
-      "Bash(do echo \"Checking $f...\")"
+      "Bash(do echo \"Checking $f...\")",
+      "WebFetch(domain:wabi.ai)",
+      "Bash(git clean:*)",
+      "Bash(del \"\\.\\C:\\Users\\vikas\\OneDrive\\Documents\\MY PROJECTS GITHUB\\GetInspire\\nul\")",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []
