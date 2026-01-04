@@ -941,18 +941,22 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // Also add image sequence frames that were detected earlier
+    let sequenceFrameCount = 0;
     if (imageSequences && imageSequences.length > 0) {
       console.log(`[GetInspire] Adding ${imageSequences.length} image sequences to download queue`);
       for (const seq of imageSequences) {
         for (const frameSrc of seq.frames) {
           if (frameSrc && !frameSrc.startsWith('data:')) {
             assetsToDownload.set(frameSrc, {type: 'image', element: null, isSequenceFrame: true});
+            sequenceFrameCount++;
           }
         }
       }
     }
 
     console.log(`[GetInspire] Found ${preloadLinks.length} preloaded images`);
+    console.log(`[GetInspire] Added ${sequenceFrameCount} image sequence frames to queue`);
+    console.log(`[GetInspire] Total assets to download: ${assetsToDownload.size}`);
 
     // Collect videos
     const videos = document.querySelectorAll('video');
@@ -1707,13 +1711,41 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     let animationGalleryHtml = '';
     if (imageSequences && imageSequences.length > 0) {
       console.log(`[GetInspire] Building animation gallery for ${imageSequences.length} sequences`);
+      console.log(`[GetInspire] Downloaded assets count: ${downloadedAssets.size}`);
+
+      // Helper to find asset by URL (handles slight URL variations)
+      const findAssetPath = (url) => {
+        // Direct lookup first
+        if (downloadedAssets.has(url)) {
+          return `assets/${downloadedAssets.get(url).filename}`;
+        }
+
+        // Try to find by filename match
+        const urlFilename = url.split('/').pop().split('?')[0];
+        for (const [assetUrl, data] of downloadedAssets) {
+          const assetFilename = assetUrl.split('/').pop().split('?')[0];
+          if (assetFilename === urlFilename) {
+            return `assets/${data.filename}`;
+          }
+        }
+
+        // Check assetMapping (built during HTML modification)
+        for (const [origUrl, localPath] of Object.entries(assetMapping)) {
+          const origFilename = origUrl.split('/').pop().split('?')[0];
+          if (origFilename === urlFilename) {
+            return localPath;
+          }
+        }
+
+        // Fallback: use the original URL (won't work offline but better than nothing)
+        console.warn(`[GetInspire] Could not find local path for: ${url}`);
+        return url;
+      };
 
       const galleryItems = imageSequences.map(seq => {
         const frameImages = seq.frames.slice(0, 20).map((frameSrc, idx) => {
-          // Get the local path if asset was downloaded
-          const assetData = downloadedAssets.get(frameSrc);
-          const localPath = assetData ? `assets/${assetData.filename}` : frameSrc;
-          return `<img src="${localPath}" alt="${seq.baseName} frame ${idx + 1}" style="max-width:200px;max-height:150px;margin:4px;border:1px solid #ddd;border-radius:4px;" loading="lazy">`;
+          const localPath = findAssetPath(frameSrc);
+          return `<img src="${localPath}" alt="${seq.baseName} frame ${idx + 1}" style="max-width:200px;max-height:150px;margin:4px;border:1px solid #ddd;border-radius:4px;" loading="lazy" onerror="this.style.display='none'">`;
         }).join('\n');
 
         return `
