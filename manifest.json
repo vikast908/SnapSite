@@ -9,7 +9,8 @@
     "scripting",
     "downloads",
     "storage",
-    "tabs"
+    "tabs",
+    "pageCapture"
   ],
 
   "host_permissions": [

@@ -15,12 +15,13 @@ const themeIcon = document.getElementById('themeIcon');
 
 // v2.0 DOM elements
 const singleModeBtn = document.getElementById('singleModeBtn');
+const mhtmlModeBtn = document.getElementById('mhtmlModeBtn');
 const crawlModeBtn = document.getElementById('crawlModeBtn');
 const crawlOptions = document.getElementById('crawlOptions');
 const maxPagesInput = document.getElementById('maxPages');
 
 // State tracking
-let captureMode = 'single'; // 'single' or 'crawl'
+let captureMode = 'single'; // 'single', 'mhtml', or 'crawl'
 let startedAt = null;
 let lastDone = 0;
 let lastTotal = 1;
@@ -44,21 +45,28 @@ function setSelected(btn, on) {
 function setModeUI(mode) {
   captureMode = mode;
 
-  // Update mode buttons
-  if (singleModeBtn && crawlModeBtn) {
-    if (mode === 'crawl') {
-      singleModeBtn.classList.remove('selected');
-      singleModeBtn.setAttribute('aria-pressed', 'false');
-      crawlModeBtn.classList.add('selected');
-      crawlModeBtn.setAttribute('aria-pressed', 'true');
-      if (crawlOptions) crawlOptions.style.display = 'block';
-    } else {
-      singleModeBtn.classList.add('selected');
-      singleModeBtn.setAttribute('aria-pressed', 'true');
-      crawlModeBtn.classList.remove('selected');
-      crawlModeBtn.setAttribute('aria-pressed', 'false');
-      if (crawlOptions) crawlOptions.style.display = 'none';
+  // Update all mode buttons
+  const allBtns = [singleModeBtn, mhtmlModeBtn, crawlModeBtn];
+  allBtns.forEach(btn => {
+    if (btn) {
+      btn.classList.remove('selected');
+      btn.setAttribute('aria-pressed', 'false');
     }
+  });
+
+  // Select the active mode button
+  if (mode === 'single' && singleModeBtn) {
+    singleModeBtn.classList.add('selected');
+    singleModeBtn.setAttribute('aria-pressed', 'true');
+    if (crawlOptions) crawlOptions.style.display = 'none';
+  } else if (mode === 'mhtml' && mhtmlModeBtn) {
+    mhtmlModeBtn.classList.add('selected');
+    mhtmlModeBtn.setAttribute('aria-pressed', 'true');
+    if (crawlOptions) crawlOptions.style.display = 'none';
+  } else if (mode === 'crawl' && crawlModeBtn) {
+    crawlModeBtn.classList.add('selected');
+    crawlModeBtn.setAttribute('aria-pressed', 'true');
+    if (crawlOptions) crawlOptions.style.display = 'block';
   }
 
   // Update stop button state
@@ -75,6 +83,15 @@ if (singleModeBtn) {
     if (captureMode !== 'single' && !isCrawling) {
       setModeUI('single');
       setStatus('Ready to capture this page');
+    }
+  });
+}
+
+if (mhtmlModeBtn) {
+  mhtmlModeBtn.addEventListener('click', () => {
+    if (captureMode !== 'mhtml' && !isCrawling) {
+      setModeUI('mhtml');
+      setStatus('Ready to save as MHTML (keeps scripts)');
     }
   });
 }
@@ -197,6 +214,31 @@ if (startBtn) {
 
         setStatus('Crawling site...');
         setProgress(10, 100);
+
+      } else if (captureMode === 'mhtml') {
+        // ==================== MHTML MODE ====================
+        setStatus('Saving as MHTML...');
+        setProgress(50, 100);
+
+        // Send SAVE_MHTML message to background
+        const response = await chrome.runtime.sendMessage({
+          type: 'SAVE_MHTML',
+          tabId: tab.id
+        });
+
+        console.log('[GetInspire Popup] MHTML message sent, response:', response);
+
+        if (response && response.success) {
+          setStatus(`Saved: ${response.filename}`);
+          setProgress(100, 100);
+        } else {
+          throw new Error(response?.error || 'Failed to save MHTML');
+        }
+
+        // Re-enable start button
+        startBtn.disabled = false;
+        startBtn.style.opacity = '1';
+        startBtn.style.cursor = 'pointer';
 
       } else {
         // ==================== SINGLE PAGE MODE ====================

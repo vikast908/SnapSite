@@ -68,6 +68,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleDownloadZip(message.data);
       break;
 
+    case 'SAVE_MHTML':
+      handleSaveMhtml(message.tabId, sendResponse);
+      return true;
+
     case 'CAPTURE_COMPLETE':
     case 'CAPTURE_ERROR':
       // Remove tab from capturing set when done
@@ -134,6 +138,49 @@ async function handleStartCapture(tabId, sendResponse) {
       type: 'CAPTURE_ERROR',
       error: error.message
     }).catch(() => {});
+  }
+}
+
+// ==================== MHTML CAPTURE ====================
+
+async function handleSaveMhtml(tabId, sendResponse) {
+  console.log('[GetInspire BG] Saving page as MHTML for tab:', tabId);
+
+  try {
+    // Get tab info for filename
+    const tab = await chrome.tabs.get(tabId);
+    const url = new URL(tab.url);
+    const hostname = url.hostname.replace(/^www\./, '');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `${hostname}-${timestamp}.mhtml`;
+
+    // Capture as MHTML
+    const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId: tabId });
+
+    // Convert blob to data URL for download
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
+
+      // Download the MHTML file
+      await chrome.downloads.download({
+        url: dataUrl,
+        filename: filename,
+        saveAs: true
+      });
+
+      console.log('[GetInspire BG] MHTML saved:', filename);
+      sendResponse({ success: true, filename: filename });
+    };
+    reader.onerror = () => {
+      console.error('[GetInspire BG] Failed to read MHTML blob');
+      sendResponse({ success: false, error: 'Failed to read MHTML data' });
+    };
+    reader.readAsDataURL(mhtmlBlob);
+
+  } catch (error) {
+    console.error('[GetInspire BG] Failed to save MHTML:', error);
+    sendResponse({ success: false, error: error.message });
   }
 }
 
