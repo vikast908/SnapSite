@@ -1,6 +1,7 @@
 # OS junk
 .DS_Store
 Thumbs.db
+nul
 
 # Editors/IDEs
 .idea/
