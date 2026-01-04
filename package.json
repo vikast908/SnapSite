@@ -1,24 +1,22 @@
 {
   "name": "getinspire",
-  "version": "1.0.0",
-  "description": "GetInspire - Chrome Extension (MV3)",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "version": "2.0.0",
+  "description": "Chrome extension to save web pages & entire sites as offline ZIP files",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vikast908/GetInspire.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "chrome-extension",
+    "web-scraper",
+    "offline",
+    "website-archiver",
+    "page-saver"
+  ],
+  "author": "vikast908",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/vikast908/GetInspire/issues"
   },
-  "homepage": "https://github.com/vikast908/GetInspire#readme",
-  "dependencies": {},
-  "devDependencies": {
-    "sharp": "^0.34.3"
-  }
+  "homepage": "https://github.com/vikast908/GetInspire#readme"
 }
