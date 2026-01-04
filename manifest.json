@@ -1,14 +1,19 @@
 {
   "manifest_version": 3,
   "name": "GetInspire",
-  "version": "0.1.0",
-  "description": "Save web pages as ZIP files",
+  "version": "2.0.0",
+  "description": "Save web pages and entire sites as offline ZIP files",
 
   "permissions": [
     "activeTab",
     "scripting",
     "downloads",
-    "storage"
+    "storage",
+    "tabs"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
   ],
 
   "background": {

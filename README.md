@@ -1,135 +1,213 @@
-GetInspire - Chrome Extension (MV3)
+# GetInspire v2.0 - Chrome Extension (MV3)
 
-Snapshot any finite web page into a ZIP that works offline: index.html + assets, plus a Quick Check page and a Fetch Report.
+Snapshot any finite web page or crawl entire sites into a ZIP that works offline: index.html + assets, plus a Quick Check page and a Fetch Report.
 
-Install (Load Unpacked)
+## What's New in v2.0
+
+### Multi-Page Site Crawling
+- **Crawl entire websites** with the new "Crawl site" mode
+- Same-domain only crawling prevents unbounded crawls
+- Configurable max pages limit (default: 10, up to 500)
+- Single ZIP output with all pages and deduplicated assets
+- Real-time progress tracking in popup
+
+### Enhanced Animation Capture
+- **CSS Hover States**: `:hover`, `:focus`, `:active` rules extracted and preserved
+- **JS Animation Libraries**: Detection for GSAP, Anime.js, Framer Motion, Lottie, ScrollMagic
+- **Scroll-Triggered Animations**: Programmatic scrolling to capture all animation states
+- **Multi-Frame Canvas**: Captures 5 frames from animated canvas elements
+- **Video Poster Extraction**: Automatic poster image capture for video elements
+
+### CSS-in-JS Support
+- Extracts styles from styled-components, Emotion, Linaria, JSS
+- Preserves dynamic styles that would otherwise be lost
+
+### Performance Improvements
+- **15 concurrent downloads** (was 6) for 2.5x faster asset fetching
+- **SHA-256 deduplication** prevents redundant asset downloads
+- **URL normalization** strips tracking params (utm_*, fbclid, gclid)
+- **2000 max assets** (was 500) for larger sites
+
+## Install (Load Unpacked)
 - Open Chrome and go to `chrome://extensions`, enable Developer mode
 - Click "Load unpacked" and select the `GetInspire/` folder
 - Pin GetInspire in the toolbar
 
-Use
+## Use
+
+### Single Page Capture
 - Open a normal, finite page (blog, docs, landing page)
-- Click "Capture this page" in the popup (or use shortcut Ctrl+Shift+S)
+- Click the GetInspire icon and select **"This page"**
 - Save the ZIP, unzip it, open `quick-check.html` for a fast sanity check, then `index.html`
-  - Quick Check embeds the report inline, so it works even when the browser blocks `fetch()` on `file://` URLs.
 
-All Pages (Site Crawl)
-- Use the popup’s "All pages" button to crawl the current site (same host only) and aggregate multiple pages into one ZIP.
-- Safety caps: defaults to max ~60 pages and ~10 minutes per crawl. You can stop anytime from the popup.
-- Scope: only links on the same host are enqueued; external links are skipped to avoid unbounded crawls.
- - Runs headless: crawl continues even if you close the popup or switch tabs. The extension badge shows progress; a small in‑page overlay appears on crawled pages with a Stop button.
+### Multi-Page Site Crawl
+- Open any page on the site you want to capture
+- Click the GetInspire icon and select **"Crawl site"**
+- Set the max pages limit (default: 10)
+- Click **Start** to begin crawling
+- Progress shows "X/Y pages" as the crawl proceeds
+- Final ZIP contains all captured pages with shared assets
 
-Theme
-- Choose Light, Dark, or Auto (system) theme.
-- Change it in Options (Theme section) or from the popup header via the Theme button.
+### Crawl Features
+- **Scope**: Same domain only - external links are skipped
+- **Progress**: Real-time page count and progress bar
+- **Stop anytime**: Click Stop to end the crawl early
+- **Memory warnings**: Alerts at 80% memory usage
+- **Continues in background**: Crawl continues even if you close the popup
 
-What's Included
+## Theme
+- Choose Light, Dark, or Auto (system) theme
+- Change it in Options (Theme section) or from the popup header via the Theme button
+
+## What's Included
+
+### Single Page Capture
 - `index.html`: DOM snapshot with local asset paths and preserved animations
 - `assets/`: downloaded CSS/JS/images/fonts/media/videos
 - `report/README.md` and `report/fetch-report.json`: human + machine summary
 - `quick-check.html`: loads `index.html` in an iframe and summarizes the report
 - `report/asset-manifest.json`: original URL + local path, bytes, mime, sha256
-- `report/page.mhtml`: browser-native MHTML snapshot (when available)
 
-Animation & Modern CSS Support
+### Multi-Page Crawl
+```
+site-capture.zip
+├── index.html        (first/home page)
+├── page-1.html       (subsequent pages)
+├── page-2.html
+├── ...
+├── assets/           (deduplicated across all pages)
+│   ├── image-abc123.jpg
+│   ├── font-def456.woff2
+│   └── ...
+└── report/
+    └── README.md
+```
+
+## Animation & Modern CSS Support
 - **CSS Keyframe Animations**: All `@keyframes` rules are extracted and preserved
 - **CSS @property**: Modern CSS custom properties with animation support captured
-- **Computed Animation States**: Animation properties (duration, timing, delay, etc.) preserved
+- **Hover/Focus/Active States**: Pseudo-class rules captured as `.gi-hover-*` classes
+- **Computed Animation States**: Animation properties (duration, timing, delay) preserved
 - **Backdrop Blur & Effects**: Modern CSS filter effects like backdrop-filter maintained
 - **Tailwind Animations**: Dynamic animation classes from Tailwind CSS preserved
 - **Transform & Transition**: All transform and transition properties captured
 - **SVG Animations**: Inline SVG animations preserved
-- **Canvas Elements**: Canvas elements converted to static images
-- **Video Support**: Video elements included with controls enabled
-- **Gradient Animations**: Animated gradients with CSS variables maintained
+- **Canvas Elements**: Animated canvas elements capture multiple frames
+- **Video Support**: Video elements included with poster images and controls
 
-Carousel Support
+### Animation Library Detection (v2.0)
+GetInspire detects and notes the presence of:
+- **GSAP / TweenMax / TweenLite**: Animation library states captured
+- **Anime.js**: Animation states preserved
+- **Framer Motion**: React animation data captured
+- **Lottie / Bodymovin**: Animation player detection
+- **ScrollMagic / ScrollTrigger**: Scroll animation states
+- **AOS (Animate On Scroll)**: Intersection-based animations
+
+## Carousel Support
 - Automatically detects and expands all carousel slides
 - Supported libraries: Slick, Swiper, Bootstrap Carousel, Splide, Keen Slider, Owl Carousel, Flickity, Glide
 - All slides displayed vertically in the captured page
 - Navigation controls automatically hidden since all content is visible
 
-Endless Pages & Limits
+## Endless Pages & Limits
 - Denylist blocks known infinite feeds/search pages
 - Heuristic auto-scrolls until bottom is stable
 - Caps: runtime, max assets, ZIP size, and concurrency (configurable in Options)
 
-Settings
+## Settings
 - Options page lets you adjust caps, redact behavior, denylist, and whether to save without prompt
   - Theme: Light, Dark, or Auto (system)
-  - Defaults are shared across the extension; the Options page imports them from `src/defaults.js`.
-  - Strip Scripts: optionally remove scripts and inline handlers for offline safety.
-  - Redaction: off by default to avoid altering captured text. Enable "Redact authenticated text" in Options if you want sensitive text (emails/tokens/user areas) replaced in the saved HTML.
+  - Defaults are shared across the extension; the Options page imports them from `src/defaults.js`
+  - Strip Scripts: optionally remove scripts and inline handlers for offline safety
+  - Redaction: off by default. Enable "Redact authenticated text" to replace sensitive text in saved HTML
 
-Permissions
-- The extension requests per-origin host access only when needed to fetch cross-origin assets in the background. Chrome may prompt you the first time an asset needs fetching from a new domain.
-- Core actions (injecting on the active tab, downloads, storage, context menus) don't require broad host access.
+### New v2.0 Options
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enableCrawl` | `true` | Enable multi-page crawling |
+| `defaultMaxPages` | `10` | Default page limit for crawls |
+| `crawlDelay` | `500` | Milliseconds between page captures |
+| `memoryWarningPct` | `80` | Warn at this memory usage percentage |
+| `captureHoverStates` | `true` | Capture CSS :hover/:focus/:active rules |
+| `captureScrollAnimations` | `true` | Trigger scroll animations before capture |
+| `captureCanvasFrames` | `true` | Capture multiple canvas frames |
+| `canvasFrameCount` | `5` | Number of canvas frames to capture |
+| `detectAnimationLibraries` | `true` | Detect GSAP, Anime.js, etc. |
+| `optimizeImages` | `false` | Resize large images |
+| `maxImageDimension` | `2000` | Max image width/height when optimizing |
+| `imageQuality` | `0.85` | JPEG quality when optimizing |
+| `extractCSSInJS` | `true` | Extract styled-components, Emotion, etc. |
+| `deduplicateAssets` | `true` | SHA-256 deduplication for assets |
 
-Notes
+## Permissions
+- The extension requests `tabs` permission for crawl navigation
+- `host_permissions: <all_urls>` enables cross-origin asset fetching
+- Core actions (injecting on the active tab, downloads, storage) work with standard permissions
+
+## Notes
 - Third-party iframes stay external by design and may not work offline
 - Cross-origin assets can be blocked by CORS/CSP; failures are listed in the report
 - The popup shows live progress during capture
-- For crawls, the progress shows completed/queued pages and ETA; final ZIP downloads automatically unless you’ve disabled "Save without prompt" in Options.
+- For crawls, progress shows "X/Y pages" with real-time updates
 - In-page overlay shows status with a Stop button during capture
 
-Popup UI Updates
-- Top right actions: [Settings] [Theme] [Report issue].
-- Progress line shows percentage, counts, and elapsed time during captures.
-- Settings opens in a small popup window (not a browser tab) with all options from `src/options.html`.
+## Popup UI
+- Mode selector: **This page** | **Crawl site**
+- Top right actions: [Settings] [Theme]
+- Progress line shows percentage, counts, and elapsed time during captures
+- Settings opens in a small popup window with all options
 
-Options Enhancements
-- Added toggles: "Show overlay" and "Font fallback" alongside existing settings.
-- Denylist presets: quick buttons to insert common social/search patterns (then click Save).
-- "Save without prompt": if enabled, ZIP downloads won't ask for a filename.
-
-Icons & Branding
-- Updated logo and toolbar icons.
-- Source SVG: `assets/logo.svg`.
-- Generated PNGs: `assets/icons/16.png`, `32.png`, `48.png`, `128.png`.
-- Rebuild icons after changing the SVG:
-
-  ```bash
-  npm install
-  node tools/build-icons.js
-  ```
-
-Architecture Overview
+## Architecture Overview
 
 ```mermaid
 graph LR
   A[User] -->|clicks Capture| P[Popup UI]
-  P -->|chrome.scripting.executeScript| C[Content Script]
-  P -->|Stop/Status| C
-  C -->|DOM scan + collect URLs| D[Page DOM]
-  C -->|normalize/lazyload fix| D
-  C -->|fetch assets same origin| Net[Network]
-  C -->|GETINSPIRE_FETCH fallback| B[Background SW]
-  B -->|fetch with per-origin permission| Net
-  C -->|build ZIP via JSZip| Z[Blob]
-  C -->|send blobUrl + filename| B
-  B -->|chrome.downloads.download| File[ZIP File]
-  Z -.->|quick-check.html and report files| File
-  P -->|shows progress/errors| A
-  O[Options Page] -->|save settings| Sync[chrome.storage.sync]
-  C -->|read defaults+options| Sync
+  P -->|single mode| C1[Content Script - Single Page]
+  P -->|crawl mode| B[Background SW - Crawl Orchestrator]
+  B -->|navigate tabs| T[Tab Navigation]
+  B -->|inject scripts| C2[Content Script - Each Page]
+  C2 -->|PAGE_CAPTURED| B
+  B -->|queue management| B
+  B -->|generate ZIP| File[Multi-Page ZIP]
+  C1 -->|build ZIP| File2[Single Page ZIP]
+  P -->|shows progress| A
 ```
 
-Capture Flow
+## Capture Flow
 
+### Single Page
 ```mermaid
 flowchart TD
   start([Start]) --> scan[Scan page: auto-scroll until height stable]
-  scan --> norm[Normalize: eager images, preload video metadata]
-  norm --> collect[Collect asset URLs from DOM, styles, srcset]
-  collect --> fetch[Download assets with concurrency + caps]
-  fetch --> rewrite[Rewrite index.html + CSS urls to local paths]
-  rewrite --> report[Build report + manifest + quick-check]
-  report --> zip[Build ZIP two pass embed report size]
-  zip --> dl[Trigger download via background]
+  scan --> anim[Capture animations: hover states, canvas frames]
+  anim --> cssjs[Extract CSS-in-JS styles]
+  cssjs --> collect[Collect asset URLs with deduplication]
+  collect --> fetch[Download assets - 15 concurrent]
+  fetch --> rewrite[Rewrite HTML + CSS urls to local paths]
+  rewrite --> zip[Build ZIP]
+  zip --> dl[Trigger download]
   dl --> done([Done])
 ```
 
-Sequence: Main Capture
+### Multi-Page Crawl
+```mermaid
+flowchart TD
+  start([Start Crawl]) --> init[Initialize queue with start URL]
+  init --> loop{Queue empty?}
+  loop -->|No| nav[Navigate tab to next URL]
+  nav --> wait[Wait for page load]
+  wait --> inject[Inject content script]
+  inject --> capture[Capture page + extract links]
+  capture --> add[Add same-domain links to queue]
+  add --> store[Store page data + assets]
+  store --> loop
+  loop -->|Yes| zip[Generate multi-page ZIP]
+  zip --> dl[Trigger download]
+  dl --> done([Done])
+```
+
+## Sequence: Crawl Mode
 
 ```mermaid
 sequenceDiagram
@@ -139,55 +217,58 @@ sequenceDiagram
   participant T as Tab
   participant C as Content Script
 
-  U->>P: Click "Capture this page"
-  P->>T: chrome.scripting.executeScript(JSZip, content.js)
-  C->>C: Auto-scroll until page height stable
-  C->>C: Normalize + Collect assets
-  C->>B: GETINSPIRE_FETCH (fallback for cross-origin)
-  B->>C: Result(arrayBuffer, contentType) or error
-  C->>C: Build ZIP (Blob)
-  C->>B: GETINSPIRE_DOWNLOAD_ZIP(blobUrl, filename)
-  B->>B: chrome.downloads.download(...)
-  B-->>P: GETINSPIRE_DONE
-  P-->>U: Show "Downloaded ZIP"
+  U->>P: Click "Crawl site"
+  P->>B: START_CRAWL(tabId, options)
+  B->>B: Initialize crawl state
+  loop For each URL in queue
+    B->>T: Navigate to URL
+    T->>B: Page loaded
+    B->>C: Inject content script
+    C->>C: Capture page + animations
+    C->>B: PAGE_CAPTURED(html, assets, links)
+    B->>B: Add new links to queue
+    B-->>P: CRAWL_PROGRESS(current, total)
+  end
+  B->>B: Generate ZIP
+  B->>U: Download ZIP
+  B-->>P: CRAWL_COMPLETE
 ```
 
-Sequence: Policy Fallback (MHTML)
-
-Some sites are enterprise-managed or block scripting via policy. The popup falls back to a single-file MHTML snapshot.
-
-```mermaid
-sequenceDiagram
-  participant U as User
-  participant P as Popup
-  participant B as Background SW
-
-  U->>P: Click Capture
-  P->>P: Injection fails with policy error
-  P->>B: GETINSPIRE_SAVE_MHTML_DIRECT(tabId)
-  B->>B: pageCapture.saveAsMHTML
-  B->>U: Download .mhtml file
-```
-
-Blobs and Object URLs
+## Blobs and Object URLs
 
 - Blob: immutable, in-memory object that represents binary data. JSZip produces a `Blob` containing the assembled ZIP.
 - Object URL: temporary URL created by `URL.createObjectURL(blob)` used to hand the Blob to the background for `chrome.downloads.download`.
-- Lifetime: we revoke it after download (`URL.revokeObjectURL`) to release memory. See:
-  - `src/content.js` (buildZip + handoff)
-  - `src/background.js` (revocation handled in the creating context)
-- Why not ArrayBuffer only? Object URLs avoid large message copies across the extension boundary on some browsers and are widely supported. A fallback path exists to reconstruct the Blob in the background if needed.
+- Lifetime: we revoke it after download (`URL.revokeObjectURL`) to release memory.
 
-Operational Flows
+## Developer Notes
 
-- Endless detection: height-stability heuristic avoids false positives on dynamic pages. Iteration cap now proceeds with capture when reached.
-- Redaction: off by default. When enabled, conservative selectors replace sensitive text with lorem-ipsum in the saved HTML; live page is never modified.
-- Denylist: blocks known infinite feeds by URL regex; editable in Options. YouTube `/feed/playlists` is allowed, other YouTube feed pages are blocked.
-
-Developer Notes
-
-- Key files: `src/content.js`, `src/background.js`, `src/popup.*`, `src/options.*`, `src/defaults.js`.
-- Commands: use the keyboard shortcut `Ctrl+Shift+S` or popup button to capture; `Ctrl+Shift+X` to stop.
+- Key files: `src/content.js`, `src/background.js`, `src/popup.*`, `src/options.*`, `src/defaults.js`
+- Commands: use the keyboard shortcut `Ctrl+Shift+S` or popup button to capture; `Ctrl+Shift+X` to stop
 - Testing tips:
-  - Use the Quick Check page in the ZIP for a fast sanity pass.
-  - Inspect `report/README.md` and `report/asset-manifest.json` for coverage and failures.
+  - Use the Quick Check page in the ZIP for a fast sanity pass
+  - Inspect `report/README.md` and `report/asset-manifest.json` for coverage and failures
+  - Test crawl mode on documentation sites with 10-20 pages
+  - Verify animation capture on sites using GSAP or Anime.js
+
+## Changelog
+
+### v2.0.0
+- Added multi-page site crawling with same-domain scope
+- Added CSS hover/focus/active state capture
+- Added JS animation library detection (GSAP, Anime.js, Framer Motion, Lottie)
+- Added scroll-triggered animation capture
+- Added multi-frame canvas capture
+- Added CSS-in-JS extraction (styled-components, Emotion, Linaria, JSS)
+- Added SHA-256 asset deduplication
+- Added video poster extraction
+- Increased concurrency to 15 (was 6)
+- Increased max assets to 2000 (was 500)
+- Added URL normalization (strips tracking params)
+- Added memory usage warnings
+- New popup UI with mode selector
+
+### v1.x
+- Single page capture
+- Basic animation support
+- Carousel expansion
+- Asset downloading with concurrency

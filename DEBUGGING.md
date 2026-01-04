@@ -1,24 +1,4 @@
-# GetInspire Debugging Guide
-
-## Changes Made to Fix Basic Capture
-
-### 1. Created Simplified Content Script (`content-simple.js`)
-- Minimal version that only captures basic HTML
-- Better error handling and console logging
-- Direct download without complex asset handling
-- Clear status messages sent to popup
-
-### 2. Updated Background Script (`background.js`)
-- Added delay between JSZip injection and content script injection
-- Better error logging with stack traces
-- Separated JSZip and content script injection
-- Using `content-simple.js` for testing
-
-### 3. Enhanced Popup Script (`popup.js`)
-- Better URL validation (checks for edge://, about:, etc.)
-- Progress bar updates based on status messages
-- Improved error handling and user feedback
-- Better message listener with response handling
+# GetInspire v2.0 Debugging Guide
 
 ## Testing Steps
 
@@ -29,40 +9,61 @@
 4. Check for any errors in the extension card
 
 ### Step 2: Open Test Page
-1. Open the file: `test-page.html` in your browser
-   - Or navigate to any simple website like https://example.com
+1. Navigate to any website like https://example.com
+2. Or open a local documentation site for crawl testing
 
 ### Step 3: Open Browser Console
 1. Press `F12` or `Ctrl+Shift+I` to open DevTools
 2. Go to the **Console** tab
 3. Keep this open to see logs
 
-### Step 4: Test the Capture
+### Step 4: Test Single Page Capture
 1. Click the GetInspire extension icon in the toolbar
-2. Click **"This page"** button
-3. Watch the console for log messages
+2. Ensure **"This page"** is selected
+3. Click **Start**
+4. Watch the console for log messages
 
-### Expected Console Output:
+### Step 5: Test Crawl Mode (v2.0)
+1. Click the GetInspire extension icon
+2. Select **"Crawl site"**
+3. Set max pages (e.g., 5 for testing)
+4. Click **Start**
+5. Watch progress in the popup ("X/Y pages")
+
+## Expected Console Output
+
+### Single Page Capture:
 ```
 [GetInspire Popup] Start button clicked
 [GetInspire Popup] Active tab: 123 https://...
 [GetInspire BG] Starting capture for tab: 123
 [GetInspire BG] JSZip injected successfully
 [GetInspire BG] Content scripts injected successfully
-[GetInspire] Simple capture starting...
-[GetInspire] Collecting page HTML...
-[GetInspire] HTML collected: XXXXX characters
+[GetInspire] Capture starting...
+[GetInspire] Detecting animation libraries...
+[GetInspire] Capturing hover states...
+[GetInspire] Extracting CSS-in-JS styles...
+[GetInspire] Collecting assets with deduplication...
+[GetInspire] Downloading assets (15 concurrent)...
 [GetInspire] Creating ZIP...
-[GetInspire] Generating ZIP blob...
-[GetInspire] ZIP created: XXXXX bytes
-[GetInspire] Initiating download...
 [GetInspire] Download initiated successfully!
 ```
 
-### Step 5: Check Downloads
-- A ZIP file should be downloaded to your downloads folder
-- Filename format: `hostname-YYYY-MM-DDTHH-MM-SS.zip`
-- Extract and open `index.html` to verify capture
+### Crawl Mode (v2.0):
+```
+[GetInspire Popup] Crawl mode selected
+[GetInspire Popup] Starting crawl with maxPages: 10
+[GetInspire BG] START_CRAWL received
+[GetInspire BG] Initializing crawl state for domain: example.com
+[GetInspire BG] Processing page 1: https://example.com
+[GetInspire BG] Page captured, found 5 new links
+[GetInspire BG] Processing page 2: https://example.com/about
+[GetInspire BG] Page captured, found 3 new links
+...
+[GetInspire BG] Crawl complete: 10 pages captured
+[GetInspire BG] Generating multi-page ZIP...
+[GetInspire BG] Download initiated: site-capture.zip
+```
 
 ## Common Issues and Solutions
 
@@ -77,7 +78,6 @@
 **Cause:** Trying to capture chrome://, edge://, or about: pages
 **Solution:**
 - Navigate to a regular website (http:// or https://)
-- Use the included `test-page.html`
 
 ### Issue 3: No console logs appear
 **Cause:** Content script not injecting
@@ -86,17 +86,40 @@
 - Make sure "Site access" is set to "On click" or "On all sites"
 - Reload the extension and try again
 
-### Issue 4: Extension icon is greyed out
-**Cause:** Extension not active on current tab
+### Issue 4: Crawl stops after first page
+**Cause:** Same-domain check failing or no links found
 **Solution:**
-- Click the extension icon anyway
-- Or navigate to a regular webpage
+- Check background console for link extraction logs
+- Verify the site has internal links
+- Check if links use same host (www vs non-www matters)
 
-### Issue 5: "Message port closed" errors
-**Cause:** Popup closed before capture finished
+### Issue 5: Crawl progress not updating
+**Cause:** Message passing issues
 **Solution:**
-- Keep popup open during capture
-- Or check Downloads folder (capture may have completed anyway)
+- Keep popup open during crawl
+- Check background service worker console
+- Verify CRAWL_PROGRESS messages are being sent
+
+### Issue 6: Duplicate assets in ZIP
+**Cause:** Deduplication not working
+**Solution:**
+- Check console for SHA-256 hash logs
+- Verify `deduplicateAssets: true` in defaults
+- Reload extension
+
+### Issue 7: Hover states not captured
+**Cause:** CSS rules not extracted
+**Solution:**
+- Check console for "Capturing hover states" log
+- Verify `captureHoverStates: true` in defaults
+- Some sites may have complex CSS structures
+
+### Issue 8: Animation library not detected
+**Cause:** Library loaded after detection runs
+**Solution:**
+- Wait for page to fully load before capturing
+- Check console for detection results
+- Some libraries use non-standard globals
 
 ## Advanced Debugging
 
@@ -105,12 +128,29 @@
 2. Find GetInspire
 3. Click **"service worker"** link (under "Inspect views")
 4. View console logs for background script
+5. Look for crawl state and message handling logs
 
 ### View Content Script Logs
 1. Open page you want to capture
 2. Press F12 to open DevTools
 3. Go to Console tab
 4. Look for messages starting with `[GetInspire]`
+
+### Check Crawl State
+In background service worker console:
+```javascript
+// View current crawl state
+console.log(crawlState);
+
+// Check queue
+console.log(crawlState.queue);
+
+// Check visited URLs
+console.log([...crawlState.visited]);
+
+// Check captured pages count
+console.log(crawlState.pages.length);
+```
 
 ### Check Extension Permissions
 1. Go to `chrome://extensions`
@@ -120,36 +160,79 @@
    - Read and change your data on all websites
    - Download files
    - Storage
+   - Access browser tabs (v2.0)
 
 ### Manifest V3 Issues
 If you see errors about Manifest V2:
 1. Check that `manifest.json` has `"manifest_version": 3`
-2. Reload the extension
-
-## Switching Back to Full Version
-
-Once basic capture works, to switch back to the full version:
-
-1. Edit `src/background.js`
-2. Change line 32 from:
-   ```javascript
-   files: ['src/content-simple.js'] // Changed to simple version for debugging
-   ```
-   To:
-   ```javascript
-   files: ['src/content.js'] // Full version with asset downloading
-   ```
+2. Verify `version: "2.0.0"` is set
 3. Reload the extension
+
+## Debugging Specific Features
+
+### Animation Library Detection
+```javascript
+// Run in page console to test detection
+(function() {
+  const libs = {
+    gsap: !!(window.gsap || window.TweenMax || window.TweenLite),
+    anime: !!window.anime,
+    framerMotion: !!document.querySelector('[data-framer-appear-id]'),
+    lottie: !!(window.lottie || window.bodymovin),
+    scrollMagic: !!window.ScrollMagic,
+    scrollTrigger: !!window.ScrollTrigger,
+    aos: !!window.AOS
+  };
+  console.log('Detected animation libraries:', libs);
+})();
+```
+
+### CSS-in-JS Detection
+```javascript
+// Check for styled-components, Emotion, etc.
+document.querySelectorAll('style[data-styled], style[data-styled-components], style[data-emotion], style[data-linaria], style[data-jss]').forEach(s => {
+  console.log('CSS-in-JS found:', s.dataset);
+});
+```
+
+### Asset Deduplication Test
+```javascript
+// In content script context
+// Check if assets are being deduplicated
+console.log('Asset hash cache:', state.assetHashes);
+```
+
+## File Structure (v2.0)
+```
+GetInspire/
+├── src/
+│   ├── background.js         (Crawl orchestration + message handling)
+│   ├── content.js            (Page capture + animation detection)
+│   ├── defaults.js           (Config with v2.0 options)
+│   ├── popup.js              (Mode selector + crawl handlers)
+│   ├── popup.html            (UI with mode toggle)
+│   ├── options.js            (Settings logic)
+│   ├── options.html          (Settings UI)
+│   ├── theme.js              (Theme management)
+│   ├── ui.css                (Shared styles)
+│   └── vendor/
+│       └── jszip.min.js
+├── manifest.json             (v2.0.0 with tabs permission)
+├── assets/
+│   └── icons/
+└── DEBUGGING.md              (This file)
+```
 
 ## Still Not Working?
 
 If capture still fails after trying everything:
 
 1. Check browser console for red error messages
-2. Copy the full error message
-3. Check if it's a permission issue
-4. Try on a different website
-5. Try restarting the browser
+2. Check background service worker console
+3. Copy the full error message
+4. Check if it's a permission issue
+5. Try on a different website
+6. Try restarting the browser
 
 ### Check Browser Version
 - Chrome/Edge must be version 88 or higher for Manifest V3
@@ -158,36 +241,42 @@ If capture still fails after trying everything:
 ### Test JSZip Separately
 Open browser console on any page and run:
 ```javascript
-// Test if you can load JSZip manually
 var script = document.createElement('script');
 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
 document.head.appendChild(script);
 setTimeout(() => console.log('JSZip available:', typeof JSZip), 1000);
 ```
 
-If this works, the issue is with the extension's JSZip file.
+## Performance Debugging
 
-## Next Steps After Fixing
-
-Once basic capture works:
-1. Test the full version (`content.js`)
-2. Test on pages with images and CSS
-3. Test on complex websites
-4. Verify carousel expansion works
-5. Check asset downloading
-
-## File Structure
+### Check Concurrent Downloads
+```javascript
+// In content script - check concurrency
+console.log('MAX_CONCURRENT:', 15);  // Should be 15 in v2.0
 ```
-GetInspire/
-├── src/
-│   ├── background.js         (Updated with better logging)
-│   ├── content.js            (Original full version)
-│   ├── content-simple.js     (New: minimal test version)
-│   ├── popup.js              (Updated with better error handling)
-│   ├── popup.html
-│   └── vendor/
-│       └── jszip.min.js
-├── test-page.html            (New: simple test page)
-├── manifest.json
-└── DEBUGGING.md              (This file)
+
+### Monitor Memory Usage
+```javascript
+// Check memory in background script
+if (performance.memory) {
+  const usage = performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit * 100;
+  console.log('Memory usage:', usage.toFixed(1) + '%');
+}
 ```
+
+### Check Deduplication Efficiency
+After a crawl, check the background console for:
+```
+[GetInspire BG] Deduplication saved X duplicate assets
+[GetInspire BG] Final asset count: Y (from Z total)
+```
+
+## Reporting Issues
+
+When reporting issues, include:
+1. Browser and version
+2. Extension version (2.0.0)
+3. URL of problem site (if shareable)
+4. Console logs from both page and background service worker
+5. Steps to reproduce
+6. Whether issue is single-page or crawl mode

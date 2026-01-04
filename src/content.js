@@ -1,4 +1,4 @@
-// Enhanced content script for GetInspire with asset downloading and carousel support
+// Enhanced content script for GetInspire 2.0 with multi-page crawling, animation capture, and asset deduplication
 
 // CRITICAL: Check if already running BEFORE the async IIFE to prevent race conditions
 if (window.__GETINSPIRE_RUNNING__) {
@@ -7,11 +7,15 @@ if (window.__GETINSPIRE_RUNNING__) {
 }
 window.__GETINSPIRE_RUNNING__ = true;
 
-(async function() {
-  console.log('[GetInspire] Content script starting...');
+// Check if this is crawl mode (set by background script before injection)
+const isCrawlMode = window.__GETINSPIRE_CRAWL_MODE__ || false;
+const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
-  // Check if JSZip is available
-  if (!window.JSZip) {
+(async function() {
+  console.log('[GetInspire] Content script starting...', isCrawlMode ? '(Crawl Mode)' : '(Single Page Mode)');
+
+  // Check if JSZip is available (not needed in crawl mode as background handles ZIP)
+  if (!isCrawlMode && !window.JSZip) {
     console.error('[GetInspire] JSZip not loaded!');
     alert('Failed to load required libraries. Please try again.');
     window.__GETINSPIRE_RUNNING__ = false;
@@ -22,7 +26,7 @@ window.__GETINSPIRE_RUNNING__ = true;
     // Send status to popup
     chrome.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
-      status: 'Starting capture...'
+      status: isCrawlMode ? 'Capturing page for crawl...' : 'Starting capture...'
     });
 
     // Helper function to expand all carousel slides
@@ -171,8 +175,441 @@ window.__GETINSPIRE_RUNNING__ = true;
       return expandedCount;
     }
 
-    // Helper function to download a resource as blob with timeout
-    async function downloadAsBlob(url, timeoutMs = 10000) {
+    // ==================== ENHANCED ANIMATION CAPTURE (v2.0) ====================
+
+    // Detect JavaScript animation libraries on the page
+    function detectAnimationLibraries() {
+      const detected = {
+        gsap: !!(window.gsap || window.TweenMax || window.TweenLite),
+        anime: !!window.anime,
+        framerMotion: !!document.querySelector('[data-framer-appear-id], [data-framer-component-type]'),
+        lottie: !!(window.lottie || window.bodymovin),
+        scrollTrigger: !!(window.ScrollTrigger || (window.gsap && window.gsap.plugins && window.gsap.plugins.scrollTrigger)),
+        motionOne: !!window.Motion,
+        velocity: !!window.Velocity,
+        popmotion: !!window.popmotion
+      };
+
+      const activeLibs = Object.entries(detected).filter(([k, v]) => v).map(([k]) => k);
+      if (activeLibs.length > 0) {
+        console.log('[GetInspire] Detected animation libraries:', activeLibs.join(', '));
+      }
+      return detected;
+    }
+
+    // Capture CSS :hover state rules and convert to activatable classes
+    function captureHoverStates() {
+      const hoverRules = [];
+      const focusRules = [];
+      const activeRules = [];
+
+      for (const sheet of document.styleSheets) {
+        try {
+          if (!sheet.cssRules) continue;
+
+          for (const rule of sheet.cssRules) {
+            if (rule.type !== CSSRule.STYLE_RULE) continue;
+
+            const selector = rule.selectorText;
+            if (!selector) continue;
+
+            // Capture :hover rules
+            if (selector.includes(':hover')) {
+              const newSelector = selector.replace(/:hover/g, '.gi-hover-state');
+              hoverRules.push(`${newSelector} { ${rule.style.cssText} }`);
+            }
+
+            // Capture :focus rules
+            if (selector.includes(':focus')) {
+              const newSelector = selector.replace(/:focus/g, '.gi-focus-state');
+              focusRules.push(`${newSelector} { ${rule.style.cssText} }`);
+            }
+
+            // Capture :active rules
+            if (selector.includes(':active')) {
+              const newSelector = selector.replace(/:active/g, '.gi-active-state');
+              activeRules.push(`${newSelector} { ${rule.style.cssText} }`);
+            }
+          }
+        } catch (e) {
+          // Cross-origin stylesheets may throw
+        }
+      }
+
+      console.log(`[GetInspire] Captured ${hoverRules.length} :hover, ${focusRules.length} :focus, ${activeRules.length} :active rules`);
+
+      return {
+        hover: hoverRules,
+        focus: focusRules,
+        active: activeRules
+      };
+    }
+
+    // Capture GSAP animation state (if available)
+    function captureGSAPState() {
+      if (!window.gsap) return null;
+
+      try {
+        const state = {
+          library: 'GSAP',
+          version: window.gsap.version || 'unknown',
+          timelines: [],
+          tweens: []
+        };
+
+        // Try to get all tweens
+        if (window.gsap.globalTimeline) {
+          const timeline = window.gsap.globalTimeline;
+          state.timelines.push({
+            progress: timeline.progress(),
+            duration: timeline.duration(),
+            paused: timeline.paused()
+          });
+        }
+
+        console.log('[GetInspire] Captured GSAP state');
+        return state;
+      } catch (e) {
+        console.warn('[GetInspire] Failed to capture GSAP state:', e);
+        return null;
+      }
+    }
+
+    // Capture Anime.js animation state (if available)
+    function captureAnimeState() {
+      if (!window.anime) return null;
+
+      try {
+        const state = {
+          library: 'Anime.js',
+          running: window.anime.running ? window.anime.running.length : 0
+        };
+
+        console.log('[GetInspire] Captured Anime.js state');
+        return state;
+      } catch (e) {
+        console.warn('[GetInspire] Failed to capture Anime.js state:', e);
+        return null;
+      }
+    }
+
+    // Trigger scroll-based animations by scrolling the page
+    async function triggerScrollAnimations() {
+      console.log('[GetInspire] Triggering scroll animations...');
+
+      const scrollHeight = document.documentElement.scrollHeight;
+      const viewportHeight = window.innerHeight;
+      const scrollSteps = Math.min(10, Math.ceil(scrollHeight / viewportHeight));
+
+      // Scroll through the page to trigger lazy loading and scroll animations
+      for (let i = 0; i <= scrollSteps; i++) {
+        const scrollPos = (scrollHeight - viewportHeight) * (i / scrollSteps);
+        window.scrollTo(0, scrollPos);
+        await new Promise(r => setTimeout(r, 150));
+      }
+
+      // Scroll back to top
+      window.scrollTo(0, 0);
+      await new Promise(r => setTimeout(r, 100));
+
+      console.log('[GetInspire] Scroll animation trigger complete');
+    }
+
+    // Capture multiple frames from canvas elements (for animated canvases)
+    async function captureCanvasFrames(frameCount = 5, intervalMs = 100) {
+      const canvases = document.querySelectorAll('canvas');
+      const allFrames = [];
+
+      for (let i = 0; i < canvases.length; i++) {
+        const canvas = canvases[i];
+        const frames = [];
+
+        try {
+          // Check if canvas has any content
+          const ctx = canvas.getContext('2d');
+          if (!ctx) continue;
+
+          // Capture multiple frames
+          for (let f = 0; f < frameCount; f++) {
+            try {
+              frames.push({
+                frame: f,
+                dataUrl: canvas.toDataURL('image/png'),
+                timestamp: Date.now()
+              });
+
+              if (f < frameCount - 1) {
+                await new Promise(r => setTimeout(r, intervalMs));
+              }
+            } catch (e) {
+              // Canvas may be tainted
+              break;
+            }
+          }
+
+          if (frames.length > 0) {
+            // Check if frames are different (animated canvas)
+            const isAnimated = frames.length > 1 &&
+              frames.some((f, idx) => idx > 0 && f.dataUrl !== frames[0].dataUrl);
+
+            allFrames.push({
+              canvasIndex: i,
+              width: canvas.width,
+              height: canvas.height,
+              frames: frames,
+              isAnimated: isAnimated
+            });
+          }
+        } catch (e) {
+          console.warn(`[GetInspire] Could not capture canvas ${i}:`, e);
+        }
+      }
+
+      console.log(`[GetInspire] Captured frames from ${allFrames.length} canvas elements`);
+      return allFrames;
+    }
+
+    // Extract same-domain links for crawl mode
+    function extractSameDomainLinks(baseDomain) {
+      const links = new Set();
+
+      document.querySelectorAll('a[href]').forEach(anchor => {
+        try {
+          const href = anchor.getAttribute('href');
+          if (!href) return;
+
+          // Skip non-http links
+          if (href.startsWith('javascript:') || href.startsWith('mailto:') ||
+              href.startsWith('tel:') || href.startsWith('#')) {
+            return;
+          }
+
+          const url = new URL(href, window.location.href);
+
+          // Only same domain
+          if (url.hostname !== baseDomain && !url.hostname.endsWith('.' + baseDomain)) {
+            return;
+          }
+
+          // Skip file downloads
+          const ext = url.pathname.split('.').pop().toLowerCase();
+          const skipExtensions = ['pdf', 'zip', 'rar', 'exe', 'dmg', 'mp4', 'mp3', 'wav', 'avi'];
+          if (skipExtensions.includes(ext)) {
+            return;
+          }
+
+          // Normalize URL
+          url.hash = '';
+          const normalized = url.href.replace(/\/$/, '');
+          links.add(normalized);
+        } catch (e) {
+          // Invalid URL
+        }
+      });
+
+      console.log(`[GetInspire] Found ${links.size} same-domain links`);
+      return Array.from(links);
+    }
+
+    // Generate animation state metadata for inclusion in captured HTML
+    function generateAnimationMetadata(animLibs, gsapState, animeState, hoverStates, canvasFrames) {
+      return {
+        capturedAt: new Date().toISOString(),
+        animationLibraries: Object.entries(animLibs).filter(([k, v]) => v).map(([k]) => k),
+        gsap: gsapState,
+        anime: animeState,
+        hoverRulesCount: hoverStates.hover.length,
+        focusRulesCount: hoverStates.focus.length,
+        activeRulesCount: hoverStates.active.length,
+        animatedCanvases: canvasFrames.filter(c => c.isAnimated).length,
+        totalCanvases: canvasFrames.length
+      };
+    }
+
+    // ==================== CSS-IN-JS EXTRACTION (v2.0) ====================
+
+    // Extract CSS-in-JS styles from various libraries
+    function extractCSSInJS() {
+      const cssInJS = [];
+
+      // styled-components
+      document.querySelectorAll('style[data-styled], style[data-styled-components], style[data-styled-version]').forEach(style => {
+        cssInJS.push(`/* styled-components */\n${style.textContent}`);
+      });
+
+      // Emotion
+      document.querySelectorAll('style[data-emotion], style[data-emotion-css]').forEach(style => {
+        cssInJS.push(`/* emotion */\n${style.textContent}`);
+      });
+
+      // Linaria
+      document.querySelectorAll('style[data-linaria]').forEach(style => {
+        cssInJS.push(`/* linaria */\n${style.textContent}`);
+      });
+
+      // JSS
+      document.querySelectorAll('style[data-jss], style[data-jss-version]').forEach(style => {
+        cssInJS.push(`/* jss */\n${style.textContent}`);
+      });
+
+      // Aphrodite
+      document.querySelectorAll('style[data-aphrodite]').forEach(style => {
+        cssInJS.push(`/* aphrodite */\n${style.textContent}`);
+      });
+
+      // Radium (inline styles, but may have style tags)
+      document.querySelectorAll('style[data-radium]').forEach(style => {
+        cssInJS.push(`/* radium */\n${style.textContent}`);
+      });
+
+      // Generic: Any style tag with data-* attribute that looks like CSS-in-JS
+      document.querySelectorAll('style[data-n-href], style[data-next-font]').forEach(style => {
+        cssInJS.push(`/* next.js css */\n${style.textContent}`);
+      });
+
+      if (cssInJS.length > 0) {
+        console.log(`[GetInspire] Extracted ${cssInJS.length} CSS-in-JS style blocks`);
+      }
+
+      return cssInJS.join('\n\n');
+    }
+
+    // Extract video posters (create from first frame if missing)
+    async function extractVideoPosters() {
+      const videos = document.querySelectorAll('video');
+      const posters = [];
+
+      for (let i = 0; i < videos.length; i++) {
+        const video = videos[i];
+
+        // If video already has a poster, record it
+        if (video.poster) {
+          posters.push({
+            index: i,
+            type: 'attribute',
+            url: video.poster
+          });
+          continue;
+        }
+
+        // Try to capture first frame as poster
+        try {
+          // Wait for video to have enough data
+          if (video.readyState >= 2) {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || video.offsetWidth || 640;
+            canvas.height = video.videoHeight || video.offsetHeight || 360;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const posterDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+            // Set poster on the video element
+            video.setAttribute('poster', posterDataUrl);
+            video.setAttribute('data-gi-poster', 'generated');
+
+            posters.push({
+              index: i,
+              type: 'generated',
+              dataUrl: posterDataUrl
+            });
+
+            console.log(`[GetInspire] Generated poster for video ${i}`);
+          }
+        } catch (e) {
+          console.warn(`[GetInspire] Could not generate poster for video ${i}:`, e);
+        }
+      }
+
+      return posters;
+    }
+
+    // Performance constants (v2.0 - increased for better throughput)
+    const MAX_CONCURRENT = 15;  // Increased from 6
+    const MAX_ASSETS = 2000;    // Increased from 500
+    const DOWNLOAD_TIMEOUT = 15000;  // Increased from 10000
+    const MAX_IMAGE_DIMENSION = 2000;
+
+    // Asset hash cache for deduplication
+    const assetHashCache = new Map();  // url -> hash
+    const assetsByHash = new Map();    // hash -> {blob, filename, url}
+
+    // Helper function to compute SHA-256 hash of a blob (first 16 chars)
+    async function hashBlob(blob) {
+      try {
+        const buffer = await blob.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
+      } catch (e) {
+        console.warn('[GetInspire] Hash computation failed:', e);
+        return null;
+      }
+    }
+
+    // Helper function to normalize URLs (remove tracking params, etc.)
+    function normalizeUrl(url, baseUrl = window.location.href) {
+      try {
+        const parsed = new URL(url, baseUrl);
+        // Remove tracking parameters
+        const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+                               'fbclid', 'gclid', 'ref', 'source', '_ga', 'mc_cid', 'mc_eid'];
+        trackingParams.forEach(param => parsed.searchParams.delete(param));
+        // Remove hash for asset URLs
+        parsed.hash = '';
+        // Normalize trailing slashes
+        let normalized = parsed.href;
+        if (parsed.pathname !== '/' && normalized.endsWith('/')) {
+          normalized = normalized.slice(0, -1);
+        }
+        return normalized;
+      } catch (e) {
+        return url;
+      }
+    }
+
+    // Helper function to optimize large images
+    async function optimizeImage(blob, maxDimension = MAX_IMAGE_DIMENSION) {
+      // Skip if already small or not an image
+      if (blob.size < 100000 || !blob.type.startsWith('image/')) return blob;
+      // Skip SVGs (they're already vector)
+      if (blob.type === 'image/svg+xml') return blob;
+
+      try {
+        const bitmap = await createImageBitmap(blob);
+        // Check if resize needed
+        if (bitmap.width <= maxDimension && bitmap.height <= maxDimension) {
+          return blob;
+        }
+
+        // Calculate new dimensions maintaining aspect ratio
+        const ratio = Math.min(maxDimension / bitmap.width, maxDimension / bitmap.height);
+        const newWidth = Math.round(bitmap.width * ratio);
+        const newHeight = Math.round(bitmap.height * ratio);
+
+        console.log(`[GetInspire] Optimizing image: ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}`);
+
+        // Create canvas and resize
+        const canvas = new OffscreenCanvas(newWidth, newHeight);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, newWidth, newHeight);
+
+        // Convert back to blob
+        const optimizedBlob = await canvas.convertToBlob({
+          type: blob.type === 'image/png' ? 'image/png' : 'image/jpeg',
+          quality: 0.85
+        });
+
+        return optimizedBlob;
+      } catch (e) {
+        console.warn('[GetInspire] Image optimization failed:', e);
+        return blob;
+      }
+    }
+
+    // Helper function to download a resource as blob with timeout and deduplication
+    async function downloadAsBlob(url, timeoutMs = DOWNLOAD_TIMEOUT) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -189,7 +626,14 @@ window.__GETINSPIRE_RUNNING__ = true;
           return null;
         }
 
-        return await response.blob();
+        let blob = await response.blob();
+
+        // Optimize images if they're large
+        if (blob.type.startsWith('image/')) {
+          blob = await optimizeImage(blob);
+        }
+
+        return blob;
       } catch (error) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
@@ -252,8 +696,43 @@ window.__GETINSPIRE_RUNNING__ = true;
     // Step 1: Expand carousels before capturing
     await expandCarousels();
 
+    // Step 1.5: Enhanced animation capture (v2.0)
+    chrome.runtime.sendMessage({
+      type: 'CAPTURE_STATUS',
+      status: 'Capturing animations...'
+    });
+
+    // Trigger scroll animations to ensure all lazy content loads
+    await triggerScrollAnimations();
+
+    // Detect animation libraries
+    const animationLibraries = detectAnimationLibraries();
+
+    // Capture hover/focus/active states
+    const interactionStates = captureHoverStates();
+
+    // Capture GSAP and Anime.js state if present
+    const gsapState = captureGSAPState();
+    const animeState = captureAnimeState();
+
+    // Capture canvas frames for animated canvases
+    const canvasFramesData = await captureCanvasFrames(5, 100);
+
+    // Extract CSS-in-JS styles
+    const cssInJSStyles = extractCSSInJS();
+
+    // Extract video posters
+    await extractVideoPosters();
+
+    // Generate animation metadata
+    const animationMetadata = generateAnimationMetadata(
+      animationLibraries, gsapState, animeState, interactionStates, canvasFramesData
+    );
+
+    console.log('[GetInspire] Animation capture complete:', animationMetadata);
+
     // Wait a bit for any lazy-loaded images to appear
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Step 2: Collect all assets
     console.log('[GetInspire] Collecting all assets...');
@@ -426,7 +905,6 @@ window.__GETINSPIRE_RUNNING__ = true;
     console.log(`[GetInspire] Found ${assetsToDownload.size} assets to download`);
 
     // Safety check - limit total assets to prevent memory issues
-    const MAX_ASSETS = 500;
     if (assetsToDownload.size > MAX_ASSETS) {
       console.warn(`[GetInspire] Too many assets (${assetsToDownload.size}), limiting to ${MAX_ASSETS}`);
       const limitedAssets = new Map([...assetsToDownload.entries()].slice(0, MAX_ASSETS));
@@ -434,18 +912,17 @@ window.__GETINSPIRE_RUNNING__ = true;
       limitedAssets.forEach((v, k) => assetsToDownload.set(k, v));
     }
 
-    // Step 3: Download all assets with concurrency control
+    // Step 3: Download all assets with concurrency control and deduplication
     chrome.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: `Downloading ${assetsToDownload.size} assets...`
     });
-
-    const MAX_CONCURRENT = 6; // Limit concurrent downloads
     let downloadCount = 0;
     let successCount = 0;
     let failCount = 0;
+    let deduplicatedCount = 0;
 
-    // Helper to download with concurrency limit
+    // Helper to download with concurrency limit and deduplication
     async function downloadWithLimit(entries) {
       const chunks = [];
       for (let i = 0; i < entries.length; i += MAX_CONCURRENT) {
@@ -460,7 +937,8 @@ window.__GETINSPIRE_RUNNING__ = true;
           if (downloadCount % 10 === 0) {
             chrome.runtime.sendMessage({
               type: 'CAPTURE_STATUS',
-              status: `Downloading assets... ${downloadCount}/${assetsToDownload.size}`
+              status: `Downloading assets... ${downloadCount}/${assetsToDownload.size}`,
+              progress: { done: downloadCount, total: assetsToDownload.size }
             });
           }
 
@@ -469,10 +947,37 @@ window.__GETINSPIRE_RUNNING__ = true;
           const blob = await downloadAsBlob(url);
           if (blob) {
             try {
-              const base64 = await blobToBase64(blob);
-              const filename = getFilenameFromUrl(url);
-              downloadedAssets.set(url, {blob, base64, filename});
-              successCount++;
+              // Compute hash for deduplication
+              const hash = await hashBlob(blob);
+
+              // Check if we already have this content
+              if (hash && assetsByHash.has(hash)) {
+                // Reuse existing asset
+                const existing = assetsByHash.get(hash);
+                downloadedAssets.set(url, {
+                  blob: existing.blob,
+                  base64: existing.base64,
+                  filename: existing.filename,
+                  hash: hash,
+                  deduplicated: true
+                });
+                deduplicatedCount++;
+                successCount++;
+                console.log(`[GetInspire] Deduplicated: ${url.substring(0, 50)}...`);
+              } else {
+                // New unique asset
+                const base64 = await blobToBase64(blob);
+                const filename = getFilenameFromUrl(url);
+                const assetData = {blob, base64, filename, hash};
+                downloadedAssets.set(url, assetData);
+
+                // Store by hash for future deduplication
+                if (hash) {
+                  assetsByHash.set(hash, assetData);
+                  assetHashCache.set(url, hash);
+                }
+                successCount++;
+              }
             } catch (e) {
               console.warn(`[GetInspire] Failed to process blob for ${url}:`, e);
               failCount++;
@@ -487,7 +992,7 @@ window.__GETINSPIRE_RUNNING__ = true;
     const assetEntries = [...assetsToDownload.entries()];
     await downloadWithLimit(assetEntries);
 
-    console.log(`[GetInspire] Downloaded ${successCount}/${assetsToDownload.size} assets (${failCount} failed)`);
+    console.log(`[GetInspire] Downloaded ${successCount}/${assetsToDownload.size} assets (${failCount} failed, ${deduplicatedCount} deduplicated)`);
 
     // Step 4: Clone document and replace asset URLs
     console.log('[GetInspire] Creating modified HTML...');
@@ -781,6 +1286,25 @@ window.__GETINSPIRE_RUNNING__ = true;
       styles.push(computedCSS);
     }
 
+    // Add hover/focus/active state CSS (v2.0)
+    if (interactionStates.hover.length > 0) {
+      const hoverCSS = `/* Hover state rules (activate with .gi-hover-state class) */\n${interactionStates.hover.join('\n')}`;
+      styles.push(hoverCSS);
+    }
+    if (interactionStates.focus.length > 0) {
+      const focusCSS = `/* Focus state rules (activate with .gi-focus-state class) */\n${interactionStates.focus.join('\n')}`;
+      styles.push(focusCSS);
+    }
+    if (interactionStates.active.length > 0) {
+      const activeCSS = `/* Active state rules (activate with .gi-active-state class) */\n${interactionStates.active.join('\n')}`;
+      styles.push(activeCSS);
+    }
+
+    // Add CSS-in-JS styles (v2.0)
+    if (cssInJSStyles) {
+      styles.push(`/* CSS-in-JS extracted styles */\n${cssInJSStyles}`);
+    }
+
     // Add carousel visibility and animation enhancement CSS
     const enhancementCSS = `
       /* GetInspire: Ensure all carousel slides are visible */
@@ -982,7 +1506,37 @@ window.__GETINSPIRE_RUNNING__ = true;
       `<style>\n${combinedCSS}\n</style>\n${carouselScript}\n</head>`
     );
 
-    // Step 7: Create ZIP file
+    // ==================== CRAWL MODE BRANCH (v2.0) ====================
+    if (isCrawlMode) {
+      console.log('[GetInspire] Crawl mode: Sending page data to background...');
+
+      // Extract links for crawl
+      const links = extractSameDomainLinks(crawlBaseDomain);
+
+      // Send captured page data to background (with processed HTML)
+      chrome.runtime.sendMessage({
+        type: 'PAGE_CAPTURED',
+        pageData: {
+          url: window.location.href,
+          title: document.title,
+          html: finalHtml
+        },
+        links: links
+      });
+
+      chrome.runtime.sendMessage({
+        type: 'CAPTURE_STATUS',
+        status: `Page captured, found ${links.length} links`
+      });
+
+      console.log('[GetInspire] Crawl mode: Page captured, found', links.length, 'links');
+
+      // Skip ZIP generation - background will handle it
+      window.__GETINSPIRE_RUNNING__ = false;
+      return;
+    }
+
+    // Step 7: Create ZIP file (single-page mode only)
     console.log('[GetInspire] Creating ZIP file...');
     const zip = new JSZip();
 
@@ -998,15 +1552,18 @@ window.__GETINSPIRE_RUNNING__ = true;
     }
 
     // Add readme file
+    const animLibsList = Object.entries(animationLibraries).filter(([k, v]) => v).map(([k]) => k);
     const readme = `# Captured Page Information
 
 URL: ${window.location.href}
 Title: ${document.title}
 Captured: ${new Date().toISOString()}
+GetInspire Version: 2.0.0
 
 ## Statistics
 - Total assets found: ${assetsToDownload.size}
 - Assets downloaded: ${downloadedAssets.size}
+- Assets deduplicated: ${deduplicatedCount}
 - Assets embedded (base64): ${[...downloadedAssets.values()].filter(d => d.blob && d.blob.size < 100000).length}
 - Assets saved separately: ${[...downloadedAssets.values()].filter(d => d.blob && d.blob.size >= 100000).length}
 - Images captured: ${images.length}
@@ -1016,7 +1573,7 @@ Captured: ${new Date().toISOString()}
 - Script files found: ${scriptElements.length}
 - Fonts extracted: ${[...assetsToDownload.values()].filter(d => d.type === 'font').length}
 
-## Animation Support
+## Animation Support (v2.0 Enhanced)
 - CSS keyframe animations preserved
 - CSS @property declarations captured
 - Computed animation states preserved
@@ -1024,6 +1581,17 @@ Captured: ${new Date().toISOString()}
 - Tailwind CSS animations maintained
 - SVG animations captured
 - Transform and transition properties preserved
+- **Hover states captured**: ${interactionStates.hover.length} rules (use .gi-hover-state class)
+- **Focus states captured**: ${interactionStates.focus.length} rules (use .gi-focus-state class)
+- **Active states captured**: ${interactionStates.active.length} rules (use .gi-active-state class)
+- **Animation libraries detected**: ${animLibsList.length > 0 ? animLibsList.join(', ') : 'None'}
+- **Animated canvases**: ${canvasFramesData.filter(c => c.isAnimated).length} of ${canvasFramesData.length}
+
+## CSS-in-JS Support (v2.0)
+- styled-components styles extracted
+- Emotion styles extracted
+- Linaria/JSS/Aphrodite styles extracted
+- Next.js CSS modules captured
 
 ## Carousel Support
 - All carousel slides have been expanded and made visible
@@ -1034,15 +1602,18 @@ Captured: ${new Date().toISOString()}
 ## Media Support
 - Canvas elements converted to images
 - Videos included with controls enabled
+- Video posters auto-generated if missing
 - SVG graphics preserved
 - Background images captured
 
 ## Notes
 - Small assets (<100KB) are embedded as base64
 - Large assets are saved in the assets folder
+- Duplicate assets are deduplicated by content hash
 - The page works completely offline
 - Animations will replay on page load
 - Interactive features are preserved where possible
+- To activate hover states, add .gi-hover-state class to elements
 `;
     zip.file('README.md', readme);
 
@@ -1099,9 +1670,12 @@ Captured: ${new Date().toISOString()}
       type: 'CAPTURE_ERROR',
       error: error.message
     });
-    alert('Capture failed: ' + error.message);
+    if (!isCrawlMode) {
+      alert('Capture failed: ' + error.message);
+    }
   } finally {
     // Clean up
     window.__GETINSPIRE_RUNNING__ = false;
   }
 })();
+

@@ -271,6 +271,91 @@
       text-align: center;
       opacity: 0.6;
     }
+
+    /* Mode selector (v2.0) */
+    .gi .gi-mode-selector {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .gi .mode-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 10px;
+      background: var(--gi-button-bg);
+      border: 1px solid var(--gi-stroke);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gi-text);
+      transition: all 0.2s ease;
+    }
+
+    .gi .mode-btn svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    .gi .mode-btn:hover {
+      background: var(--gi-button-hover);
+      border-color: var(--gi-accent);
+    }
+
+    .gi .mode-btn.selected {
+      background: var(--gi-button-hover);
+      border-color: var(--gi-accent);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    html[data-theme="dark"] .gi .mode-btn.selected {
+      box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .gi .mode-btn.selected {
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+      }
+    }
+
+    /* Crawl options (v2.0) */
+    .gi .crawl-options {
+      margin-bottom: 10px;
+      padding: 10px;
+      background: var(--gi-panel-bg);
+      border: 1px solid var(--gi-stroke);
+      border-radius: 8px;
+    }
+
+    .gi .crawl-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--gi-text);
+    }
+
+    .gi .crawl-label input {
+      width: 70px;
+      padding: 6px 8px;
+      border: 1px solid var(--gi-stroke);
+      border-radius: 6px;
+      background: var(--gi-bg);
+      color: var(--gi-text);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .gi .crawl-label input:focus {
+      outline: none;
+      border-color: var(--gi-accent);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
   </style>
 </head>
 <body class="gi">
@@ -304,8 +389,36 @@
     </a>
   </div>
 
+  <!-- Mode selector (v2.0) -->
+  <div class="gi-mode-selector">
+    <button id="singleModeBtn" class="mode-btn selected" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <line x1="9" y1="9" x2="15" y2="9"/>
+        <line x1="9" y1="13" x2="15" y2="13"/>
+        <line x1="9" y1="17" x2="12" y2="17"/>
+      </svg>
+      <span>This page</span>
+    </button>
+    <button id="crawlModeBtn" class="mode-btn" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </svg>
+      <span>Crawl site</span>
+    </button>
+  </div>
+
+  <!-- Crawl options (hidden by default) -->
+  <div id="crawlOptions" class="crawl-options" style="display: none;">
+    <label class="crawl-label">
+      <span>Max pages:</span>
+      <input type="number" id="maxPages" value="10" min="1" max="500" />
+    </label>
+  </div>
+
   <div class="gi-row">
-    <button id="startBtn" class="selected" aria-pressed="true">This page</button>
+    <button id="startBtn" class="selected" aria-pressed="true">Start capture</button>
     <button id="stopBtn" disabled>Stop</button>
   </div>
 

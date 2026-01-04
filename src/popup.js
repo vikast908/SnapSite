@@ -1,5 +1,5 @@
-// Popup script for GetInspire
-console.log('[GetInspire Popup] Loaded');
+// Popup script for GetInspire 2.0
+console.log('[GetInspire Popup] Loaded (v2.0)');
 
 // Get DOM elements
 const statusEl = document.getElementById('status');
@@ -13,11 +13,18 @@ const openOptionsLink = document.getElementById('openOptionsLink');
 const themeToggle = document.getElementById('themeToggle');
 const themeIcon = document.getElementById('themeIcon');
 
+// v2.0 DOM elements
+const singleModeBtn = document.getElementById('singleModeBtn');
+const crawlModeBtn = document.getElementById('crawlModeBtn');
+const crawlOptions = document.getElementById('crawlOptions');
+const maxPagesInput = document.getElementById('maxPages');
+
 // State tracking
 let captureMode = 'single'; // 'single' or 'crawl'
 let startedAt = null;
 let lastDone = 0;
 let lastTotal = 1;
+let isCrawling = false;
 
 // Utility functions
 function setStatus(text) {
@@ -36,15 +43,49 @@ function setSelected(btn, on) {
 
 function setModeUI(mode) {
   captureMode = mode;
-  if (mode === 'crawl') {
-    setSelected(startBtn, false);
-    try { startBtn.disabled = true; } catch (e) {}
+
+  // Update mode buttons
+  if (singleModeBtn && crawlModeBtn) {
+    if (mode === 'crawl') {
+      singleModeBtn.classList.remove('selected');
+      singleModeBtn.setAttribute('aria-pressed', 'false');
+      crawlModeBtn.classList.add('selected');
+      crawlModeBtn.setAttribute('aria-pressed', 'true');
+      if (crawlOptions) crawlOptions.style.display = 'block';
+    } else {
+      singleModeBtn.classList.add('selected');
+      singleModeBtn.setAttribute('aria-pressed', 'true');
+      crawlModeBtn.classList.remove('selected');
+      crawlModeBtn.setAttribute('aria-pressed', 'false');
+      if (crawlOptions) crawlOptions.style.display = 'none';
+    }
+  }
+
+  // Update stop button state
+  if (isCrawling) {
     try { stopBtn.disabled = false; } catch (e) {}
   } else {
-    setSelected(startBtn, true);
-    try { startBtn.disabled = false; } catch (e) {}
     try { stopBtn.disabled = true; } catch (e) {}
   }
+}
+
+// Mode toggle handlers (v2.0)
+if (singleModeBtn) {
+  singleModeBtn.addEventListener('click', () => {
+    if (captureMode !== 'single' && !isCrawling) {
+      setModeUI('single');
+      setStatus('Ready to capture this page');
+    }
+  });
+}
+
+if (crawlModeBtn) {
+  crawlModeBtn.addEventListener('click', () => {
+    if (captureMode !== 'crawl' && !isCrawling) {
+      setModeUI('crawl');
+      setStatus('Ready to crawl site');
+    }
+  });
 }
 
 function fmtTime(ms) {
@@ -87,7 +128,7 @@ function resetProgress() {
 // Event handlers with micro-interactions
 if (startBtn) {
   startBtn.addEventListener('click', async () => {
-    console.log('[GetInspire Popup] Start button clicked');
+    console.log('[GetInspire Popup] Start button clicked, mode:', captureMode);
 
     // Prevent multiple clicks while capturing
     if (startBtn.disabled) {
@@ -126,34 +167,70 @@ if (startBtn) {
 
       // Start capture
       startedAt = Date.now();
-      setStatus('Starting capture...');
-      setProgress(10, 100);
 
-      // Send message to background script to start capture
-      const response = await chrome.runtime.sendMessage({
-        type: 'START_CAPTURE',
-        tabId: tab.id
-      });
+      if (captureMode === 'crawl') {
+        // ==================== CRAWL MODE (v2.0) ====================
+        const maxPages = parseInt(maxPagesInput?.value) || 10;
+        isCrawling = true;
 
-      console.log('[GetInspire Popup] Message sent, response:', response);
+        setStatus(`Starting crawl (max ${maxPages} pages)...`);
+        setProgress(5, 100);
 
-      // Check if injection was successful
-      if (response && !response.success) {
-        throw new Error(response.error || 'Failed to inject scripts');
+        // Enable stop button
+        if (stopBtn) stopBtn.disabled = false;
+
+        // Send START_CRAWL message to background
+        const response = await chrome.runtime.sendMessage({
+          type: 'START_CRAWL',
+          tabId: tab.id,
+          options: {
+            maxPages: maxPages,
+            crawlDelay: 500
+          }
+        });
+
+        console.log('[GetInspire Popup] Crawl message sent, response:', response);
+
+        if (response && !response.success) {
+          throw new Error(response.error || 'Failed to start crawl');
+        }
+
+        setStatus('Crawling site...');
+        setProgress(10, 100);
+
+      } else {
+        // ==================== SINGLE PAGE MODE ====================
+        setStatus('Starting capture...');
+        setProgress(10, 100);
+
+        // Send message to background script to start capture
+        const response = await chrome.runtime.sendMessage({
+          type: 'START_CAPTURE',
+          tabId: tab.id
+        });
+
+        console.log('[GetInspire Popup] Message sent, response:', response);
+
+        // Check if injection was successful
+        if (response && !response.success) {
+          throw new Error(response.error || 'Failed to inject scripts');
+        }
+
+        setStatus('Scripts injected, processing page...');
+        setProgress(30, 100);
       }
-
-      setStatus('Scripts injected, processing page...');
-      setProgress(30, 100);
 
     } catch (error) {
       console.error('[GetInspire Popup] Error:', error);
       setStatus('Error: ' + error.message);
       resetProgress();
+      isCrawling = false;
 
       // Re-enable button on error
       startBtn.disabled = false;
       startBtn.style.opacity = '1';
       startBtn.style.cursor = 'pointer';
+      if (stopBtn) stopBtn.disabled = true;
     }
   });
 
@@ -168,10 +245,17 @@ if (startBtn) {
 }
 
 if (stopBtn) {
-  stopBtn.addEventListener('click', () => {
+  stopBtn.addEventListener('click', async () => {
     console.log('[GetInspire Popup] Stop button clicked');
-    setStatus('Stopping...');
-    chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
+
+    if (isCrawling) {
+      setStatus('Stopping crawl...');
+      const response = await chrome.runtime.sendMessage({ type: 'STOP_CRAWL' });
+      console.log('[GetInspire Popup] Stop crawl response:', response);
+    } else {
+      setStatus('Stopping...');
+      chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
+    }
   });
 }
 
@@ -206,63 +290,118 @@ if (openOptionsLink) {
 
 // Listen for messages from background/content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[GetInspire Popup] Received message:', message, 'from:', sender);
+  console.log('[GetInspire Popup] Received message:', message.type);
 
   try {
-    if (message.type === 'CAPTURE_STATUS') {
-      const status = message.status || 'Processing...';
-      setStatus(status);
+    switch (message.type) {
+      case 'CAPTURE_STATUS': {
+        const status = message.status || 'Processing...';
+        setStatus(status);
 
-      // Update progress based on status text
-      if (status.includes('Starting')) {
-        setProgress(25, 100);
-      } else if (status.includes('ZIP')) {
-        setProgress(50, 100);
-      } else if (status.includes('Generating')) {
-        setProgress(75, 100);
-      } else if (status.includes('download')) {
-        setProgress(90, 100);
+        // Update progress based on status text
+        if (status.includes('Starting')) {
+          setProgress(25, 100);
+        } else if (status.includes('ZIP')) {
+          setProgress(50, 100);
+        } else if (status.includes('Generating')) {
+          setProgress(75, 100);
+        } else if (status.includes('download')) {
+          setProgress(90, 100);
+        }
+
+        if (message.progress) {
+          setProgress(message.progress.done, message.progress.total);
+        }
+        break;
       }
 
-      if (message.progress) {
-        setProgress(message.progress.done, message.progress.total);
-      }
-    } else if (message.type === 'CAPTURE_ERROR') {
-      console.error('[GetInspire Popup] Capture error:', message.error);
-      setStatus('Error: ' + (message.error || 'Unknown error'));
-      resetProgress();
+      case 'CRAWL_PROGRESS': {
+        // v2.0: Handle crawl progress updates
+        const { current, total, url } = message;
+        setStatus(`Crawling: ${current}/${total} pages`);
+        setProgress(current, total);
 
-      // Re-enable start button
-      if (startBtn) {
-        startBtn.disabled = false;
-        startBtn.style.opacity = '1';
-        startBtn.style.cursor = 'pointer';
+        // Update meta info
+        if (countMetaEl) countMetaEl.textContent = `${current}/${total} pages`;
+        break;
       }
 
-      // Show alert for critical errors
-      if (message.error && message.error.length < 100) {
-        setTimeout(() => alert('Capture failed: ' + message.error), 100);
-      }
-    } else if (message.type === 'DOWNLOAD_SUCCESS') {
-      setStatus('Download completed!');
-      setProgress(100, 100);
+      case 'CRAWL_COMPLETE': {
+        // v2.0: Handle crawl completion
+        const { pageCount, duration } = message;
+        const durationSec = Math.round((duration || 0) / 1000);
+        setStatus(`Crawl complete! ${pageCount} pages captured`);
+        setProgress(100, 100);
+        isCrawling = false;
 
-      // Re-enable start button
-      if (startBtn) {
-        startBtn.disabled = false;
-        startBtn.style.opacity = '1';
-        startBtn.style.cursor = 'pointer';
+        // Re-enable UI
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.style.opacity = '1';
+          startBtn.style.cursor = 'pointer';
+        }
+        if (stopBtn) stopBtn.disabled = true;
+        break;
       }
-    } else if (message.type === 'CAPTURE_COMPLETE') {
-      setStatus('Capture completed!');
-      setProgress(100, 100);
 
-      // Re-enable start button
-      if (startBtn) {
-        startBtn.disabled = false;
-        startBtn.style.opacity = '1';
-        startBtn.style.cursor = 'pointer';
+      case 'MEMORY_WARNING': {
+        // v2.0: Handle memory warnings
+        setStatus(`Warning: High memory (${message.percent}%)`);
+        break;
       }
+
+      case 'CAPTURE_ERROR': {
+        console.error('[GetInspire Popup] Capture error:', message.error);
+        setStatus('Error: ' + (message.error || 'Unknown error'));
+        resetProgress();
+        isCrawling = false;
+
+        // Re-enable start button
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.style.opacity = '1';
+          startBtn.style.cursor = 'pointer';
+        }
+        if (stopBtn) stopBtn.disabled = true;
+
+        // Show alert for critical errors (non-crawl mode only)
+        if (!isCrawling && message.error && message.error.length < 100) {
+          setTimeout(() => alert('Capture failed: ' + message.error), 100);
+        }
+        break;
+      }
+
+      case 'DOWNLOAD_SUCCESS': {
+        setStatus('Download completed!');
+        setProgress(100, 100);
+        isCrawling = false;
+
+        // Re-enable start button
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.style.opacity = '1';
+          startBtn.style.cursor = 'pointer';
+        }
+        if (stopBtn) stopBtn.disabled = true;
+        break;
+      }
+
+      case 'CAPTURE_COMPLETE': {
+        setStatus('Capture completed!');
+        setProgress(100, 100);
+
+        // Re-enable start button
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.style.opacity = '1';
+          startBtn.style.cursor = 'pointer';
+        }
+        if (stopBtn) stopBtn.disabled = true;
+        break;
+      }
+
+      default:
+        console.log('[GetInspire Popup] Unknown message type:', message.type);
     }
   } catch (error) {
     console.error('[GetInspire Popup] Error handling message:', error);
