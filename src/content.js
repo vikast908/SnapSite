@@ -1707,78 +1707,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       </script>
     `;
 
-    // Build animation gallery if image sequences were found
-    let animationGalleryHtml = '';
-    if (imageSequences && imageSequences.length > 0) {
-      console.log(`[GetInspire] Building animation gallery for ${imageSequences.length} sequences`);
-      console.log(`[GetInspire] Downloaded assets count: ${downloadedAssets.size}`);
-
-      // Helper to find asset by URL (handles slight URL variations)
-      const findAssetPath = (url) => {
-        // Direct lookup first
-        if (downloadedAssets.has(url)) {
-          return `assets/${downloadedAssets.get(url).filename}`;
-        }
-
-        // Try to find by filename match
-        const urlFilename = url.split('/').pop().split('?')[0];
-        for (const [assetUrl, data] of downloadedAssets) {
-          const assetFilename = assetUrl.split('/').pop().split('?')[0];
-          if (assetFilename === urlFilename) {
-            return `assets/${data.filename}`;
-          }
-        }
-
-        // Check assetMapping (built during HTML modification)
-        for (const [origUrl, localPath] of Object.entries(assetMapping)) {
-          const origFilename = origUrl.split('/').pop().split('?')[0];
-          if (origFilename === urlFilename) {
-            return localPath;
-          }
-        }
-
-        // Fallback: use the original URL (won't work offline but better than nothing)
-        console.warn(`[GetInspire] Could not find local path for: ${url}`);
-        return url;
-      };
-
-      const galleryItems = imageSequences.map(seq => {
-        const frameImages = seq.frames.slice(0, 20).map((frameSrc, idx) => {
-          const localPath = findAssetPath(frameSrc);
-          return `<img src="${localPath}" alt="${seq.baseName} frame ${idx + 1}" style="max-width:200px;max-height:150px;margin:4px;border:1px solid #ddd;border-radius:4px;" loading="lazy" onerror="this.style.display='none'">`;
-        }).join('\n');
-
-        return `
-          <div style="margin-bottom:24px;">
-            <h4 style="margin:0 0 8px 0;color:#333;font-size:14px;">${seq.baseName} (${seq.frameCount} frames)</h4>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;">
-              ${frameImages}
-            </div>
-          </div>
-        `;
-      }).join('\n');
-
-      animationGalleryHtml = `
-        <div id="gi-animation-gallery" style="position:fixed;bottom:20px;right:20px;max-width:400px;max-height:60vh;overflow-y:auto;background:white;border:2px solid #3b82f6;border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:999999;font-family:system-ui,-apple-system,sans-serif;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #eee;padding-bottom:8px;">
-            <span style="font-weight:600;color:#1f2937;">Animation Frames</span>
-            <button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;cursor:pointer;font-size:18px;color:#6b7280;">&times;</button>
-          </div>
-          <p style="font-size:12px;color:#6b7280;margin:0 0 12px 0;">These are the animation frames captured from scroll-triggered animations. The original animations require JavaScript to play.</p>
-          ${galleryItems}
-        </div>
-      `;
-    }
-
     let finalHtml = modifiedHtml.replace(
       '</head>',
       `<style>\n${combinedCSS}\n</style>\n${carouselScript}\n</head>`
     );
-
-    // Add animation gallery before closing body tag
-    if (animationGalleryHtml) {
-      finalHtml = finalHtml.replace('</body>', `${animationGalleryHtml}\n</body>`);
-    }
 
     // ==================== CRAWL MODE BRANCH (v2.0) ====================
     if (isCrawlMode) {
