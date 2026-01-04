@@ -377,22 +377,40 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       console.log('[GetInspire] Detecting image sequences...');
       const sequences = [];
 
-      // Look for preloaded images with sequential naming patterns
-      const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"]');
+      // Look for preloaded images
+      const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"], link[rel="prefetch"][as="image"]');
       const preloadSrcs = Array.from(preloadLinks).map(l => l.href);
+      console.log(`[GetInspire] Found ${preloadSrcs.length} preloaded/prefetched images`);
+
+      // Log first few for debugging
+      if (preloadSrcs.length > 0) {
+        console.log('[GetInspire] Sample preloaded images:', preloadSrcs.slice(0, 5));
+      }
 
       // Also check for images with numbered patterns
       const allImages = document.querySelectorAll('img[src]');
       const imageSrcs = Array.from(allImages).map(img => img.src);
 
-      const allSrcs = [...preloadSrcs, ...imageSrcs];
+      const allSrcs = [...new Set([...preloadSrcs, ...imageSrcs])]; // Deduplicate
 
-      // Group images by base name (detecting sequences like image-1.png, image-2.png, etc.)
+      // Group images by base path (detecting sequences)
       const sequenceGroups = {};
 
       for (const src of allSrcs) {
-        // Match patterns like: name-01.png, name_1.jpg, name1.webp, frame-001.png
-        const match = src.match(/^(.+?)[-_]?(\d{1,3})\.(png|jpg|jpeg|webp|gif|avif)$/i);
+        // Multiple pattern matching for different naming conventions
+        // Pattern 1: name-01.png, name_1.jpg, frame-001.png (number at end before extension)
+        let match = src.match(/^(.+?)[-_]?(\d{1,4})\.(png|jpg|jpeg|webp|gif|avif|svg)(\?.*)?$/i);
+
+        // Pattern 2: /apps/1.webp, /radio/frame2.png (folder/number pattern)
+        if (!match) {
+          match = src.match(/^(.+\/)(\d{1,4})\.(png|jpg|jpeg|webp|gif|avif|svg)(\?.*)?$/i);
+        }
+
+        // Pattern 3: name1.webp without separator
+        if (!match) {
+          match = src.match(/^(.+?)(\d{1,4})\.(png|jpg|jpeg|webp|gif|avif|svg)(\?.*)?$/i);
+        }
+
         if (match) {
           const baseName = match[1];
           const frameNum = parseInt(match[2], 10);
@@ -407,13 +425,24 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       for (const [baseName, frames] of Object.entries(sequenceGroups)) {
         if (frames.length >= 3) {
           frames.sort((a, b) => a.frameNum - b.frameNum);
+          const shortName = baseName.split('/').pop() || baseName.split('/').slice(-2).join('/');
           sequences.push({
-            baseName: baseName.split('/').pop(),
+            baseName: shortName,
             frameCount: frames.length,
             frames: frames.map(f => f.src)
           });
-          console.log(`[GetInspire] Found image sequence: ${baseName.split('/').pop()} (${frames.length} frames)`);
+          console.log(`[GetInspire] Found image sequence: ${shortName} (${frames.length} frames)`);
         }
+      }
+
+      // If no sequences found but we have preloaded images, treat them as a single sequence
+      if (sequences.length === 0 && preloadSrcs.length >= 3) {
+        console.log('[GetInspire] No numbered sequences found, treating all preloads as animation frames');
+        sequences.push({
+          baseName: 'preloaded-animations',
+          frameCount: preloadSrcs.length,
+          frames: preloadSrcs
+        });
       }
 
       // Also detect srcset or data-src patterns that might indicate lazy sequences
@@ -424,6 +453,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         }
       });
 
+      console.log(`[GetInspire] Total sequences detected: ${sequences.length}`);
       return sequences;
     }
 
@@ -900,6 +930,29 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         assetsToDownload.set(img.dataset.src, {type: 'image', element: img});
       }
     });
+
+    // Collect preloaded images (important for scroll-based animations like wabi.ai)
+    const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"], link[rel="prefetch"][as="image"]');
+    preloadLinks.forEach(link => {
+      const href = link.href;
+      if (href && !href.startsWith('data:')) {
+        assetsToDownload.set(href, {type: 'image', element: null, isPreload: true});
+      }
+    });
+
+    // Also add image sequence frames that were detected earlier
+    if (imageSequences && imageSequences.length > 0) {
+      console.log(`[GetInspire] Adding ${imageSequences.length} image sequences to download queue`);
+      for (const seq of imageSequences) {
+        for (const frameSrc of seq.frames) {
+          if (frameSrc && !frameSrc.startsWith('data:')) {
+            assetsToDownload.set(frameSrc, {type: 'image', element: null, isSequenceFrame: true});
+          }
+        }
+      }
+    }
+
+    console.log(`[GetInspire] Found ${preloadLinks.length} preloaded images`);
 
     // Collect videos
     const videos = document.querySelectorAll('video');
@@ -1650,10 +1703,50 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       </script>
     `;
 
-    const finalHtml = modifiedHtml.replace(
+    // Build animation gallery if image sequences were found
+    let animationGalleryHtml = '';
+    if (imageSequences && imageSequences.length > 0) {
+      console.log(`[GetInspire] Building animation gallery for ${imageSequences.length} sequences`);
+
+      const galleryItems = imageSequences.map(seq => {
+        const frameImages = seq.frames.slice(0, 20).map((frameSrc, idx) => {
+          // Get the local path if asset was downloaded
+          const assetData = downloadedAssets.get(frameSrc);
+          const localPath = assetData ? `assets/${assetData.filename}` : frameSrc;
+          return `<img src="${localPath}" alt="${seq.baseName} frame ${idx + 1}" style="max-width:200px;max-height:150px;margin:4px;border:1px solid #ddd;border-radius:4px;" loading="lazy">`;
+        }).join('\n');
+
+        return `
+          <div style="margin-bottom:24px;">
+            <h4 style="margin:0 0 8px 0;color:#333;font-size:14px;">${seq.baseName} (${seq.frameCount} frames)</h4>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+              ${frameImages}
+            </div>
+          </div>
+        `;
+      }).join('\n');
+
+      animationGalleryHtml = `
+        <div id="gi-animation-gallery" style="position:fixed;bottom:20px;right:20px;max-width:400px;max-height:60vh;overflow-y:auto;background:white;border:2px solid #3b82f6;border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:999999;font-family:system-ui,-apple-system,sans-serif;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #eee;padding-bottom:8px;">
+            <span style="font-weight:600;color:#1f2937;">Animation Frames</span>
+            <button onclick="this.parentElement.parentElement.style.display='none'" style="background:none;border:none;cursor:pointer;font-size:18px;color:#6b7280;">&times;</button>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin:0 0 12px 0;">These are the animation frames captured from scroll-triggered animations. The original animations require JavaScript to play.</p>
+          ${galleryItems}
+        </div>
+      `;
+    }
+
+    let finalHtml = modifiedHtml.replace(
       '</head>',
       `<style>\n${combinedCSS}\n</style>\n${carouselScript}\n</head>`
     );
+
+    // Add animation gallery before closing body tag
+    if (animationGalleryHtml) {
+      finalHtml = finalHtml.replace('</body>', `${animationGalleryHtml}\n</body>`);
+    }
 
     // ==================== CRAWL MODE BRANCH (v2.0) ====================
     if (isCrawlMode) {
