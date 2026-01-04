@@ -6,6 +6,7 @@ nul
 # Editors/IDEs
 .idea/
 .vscode/
+.claude/
 
 # Archives
 *.zip
