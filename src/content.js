@@ -294,25 +294,167 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // Trigger scroll-based animations by scrolling the page
+    // Enhanced for sites with scroll-position image sequences (like wabi.ai)
     async function triggerScrollAnimations() {
-      console.log('[GetInspire] Triggering scroll animations...');
+      console.log('[GetInspire] Triggering scroll animations (enhanced)...');
 
       const scrollHeight = document.documentElement.scrollHeight;
       const viewportHeight = window.innerHeight;
-      const scrollSteps = Math.min(10, Math.ceil(scrollHeight / viewportHeight));
 
-      // Scroll through the page to trigger lazy loading and scroll animations
+      // More scroll steps for smoother capture of scroll-triggered content
+      // Use 20 steps minimum, or 1 step per viewport height
+      const scrollSteps = Math.max(20, Math.ceil(scrollHeight / viewportHeight));
+
+      // Track all images discovered during scroll to ensure they're loaded
+      const discoveredImages = new Set();
+
+      // Helper to collect visible images at current scroll position
+      const collectVisibleImages = () => {
+        document.querySelectorAll('img[src], img[data-src], [style*="background-image"]').forEach(el => {
+          const src = el.src || el.dataset.src || '';
+          const bgMatch = el.style.backgroundImage?.match(/url\(['"]?([^'"]+)['"]?\)/);
+          if (src) discoveredImages.add(src);
+          if (bgMatch) discoveredImages.add(bgMatch[1]);
+        });
+      };
+
+      // Scroll through the page slowly to trigger all scroll-based animations
       for (let i = 0; i <= scrollSteps; i++) {
         const scrollPos = (scrollHeight - viewportHeight) * (i / scrollSteps);
-        window.scrollTo(0, scrollPos);
-        await new Promise(r => setTimeout(r, 150));
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+
+        // Wait longer at each position for animations to settle
+        // Scroll-triggered animations often need 300-500ms to complete
+        await new Promise(r => setTimeout(r, 400));
+
+        // Collect any images visible at this scroll position
+        collectVisibleImages();
+
+        // Extra wait at key positions (every 25% of page)
+        if (i % Math.floor(scrollSteps / 4) === 0) {
+          await new Promise(r => setTimeout(r, 300));
+        }
       }
 
-      // Scroll back to top
-      window.scrollTo(0, 0);
-      await new Promise(r => setTimeout(r, 100));
+      // Do a second slower pass for complex scroll animations
+      console.log('[GetInspire] Second scroll pass for complex animations...');
+      for (let i = scrollSteps; i >= 0; i--) {
+        const scrollPos = (scrollHeight - viewportHeight) * (i / scrollSteps);
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+        await new Promise(r => setTimeout(r, 200));
+        collectVisibleImages();
+      }
 
-      console.log('[GetInspire] Scroll animation trigger complete');
+      // Final scroll to capture full page state
+      window.scrollTo({ top: scrollHeight, behavior: 'instant' });
+      await new Promise(r => setTimeout(r, 500));
+      collectVisibleImages();
+
+      // Scroll back to top
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      await new Promise(r => setTimeout(r, 300));
+
+      console.log(`[GetInspire] Scroll animation complete. Discovered ${discoveredImages.size} images.`);
+
+      // Force load any lazy images that were discovered
+      for (const src of discoveredImages) {
+        if (src && !src.startsWith('data:')) {
+          try {
+            const img = new Image();
+            img.src = src;
+          } catch (e) {
+            // Ignore load errors
+          }
+        }
+      }
+
+      // Wait for images to start loading
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    // Detect and capture scroll-based image sequences (like wabi.ai flipbook animations)
+    function detectImageSequences() {
+      console.log('[GetInspire] Detecting image sequences...');
+      const sequences = [];
+
+      // Look for preloaded images with sequential naming patterns
+      const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"]');
+      const preloadSrcs = Array.from(preloadLinks).map(l => l.href);
+
+      // Also check for images with numbered patterns
+      const allImages = document.querySelectorAll('img[src]');
+      const imageSrcs = Array.from(allImages).map(img => img.src);
+
+      const allSrcs = [...preloadSrcs, ...imageSrcs];
+
+      // Group images by base name (detecting sequences like image-1.png, image-2.png, etc.)
+      const sequenceGroups = {};
+
+      for (const src of allSrcs) {
+        // Match patterns like: name-01.png, name_1.jpg, name1.webp, frame-001.png
+        const match = src.match(/^(.+?)[-_]?(\d{1,3})\.(png|jpg|jpeg|webp|gif|avif)$/i);
+        if (match) {
+          const baseName = match[1];
+          const frameNum = parseInt(match[2], 10);
+          if (!sequenceGroups[baseName]) {
+            sequenceGroups[baseName] = [];
+          }
+          sequenceGroups[baseName].push({ src, frameNum });
+        }
+      }
+
+      // Filter to only sequences with 3+ frames
+      for (const [baseName, frames] of Object.entries(sequenceGroups)) {
+        if (frames.length >= 3) {
+          frames.sort((a, b) => a.frameNum - b.frameNum);
+          sequences.push({
+            baseName: baseName.split('/').pop(),
+            frameCount: frames.length,
+            frames: frames.map(f => f.src)
+          });
+          console.log(`[GetInspire] Found image sequence: ${baseName.split('/').pop()} (${frames.length} frames)`);
+        }
+      }
+
+      // Also detect srcset or data-src patterns that might indicate lazy sequences
+      document.querySelectorAll('[data-src*="frame"], [data-src*="sequence"], [data-animation-frames]').forEach(el => {
+        const dataSrc = el.dataset.src || el.dataset.animationFrames;
+        if (dataSrc) {
+          console.log(`[GetInspire] Found animation data attribute: ${dataSrc.substring(0, 50)}...`);
+        }
+      });
+
+      return sequences;
+    }
+
+    // Preload all frames from detected image sequences
+    async function preloadImageSequences(sequences) {
+      if (!sequences.length) return;
+
+      console.log(`[GetInspire] Preloading ${sequences.length} image sequences...`);
+
+      const preloadPromises = [];
+
+      for (const seq of sequences) {
+        for (const frameSrc of seq.frames) {
+          const promise = new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve({ src: frameSrc, loaded: true });
+            img.onerror = () => resolve({ src: frameSrc, loaded: false });
+            img.src = frameSrc;
+          });
+          preloadPromises.push(promise);
+        }
+      }
+
+      // Wait for all frames to load (with timeout)
+      const results = await Promise.race([
+        Promise.all(preloadPromises),
+        new Promise(resolve => setTimeout(() => resolve([]), 5000))
+      ]);
+
+      const loadedCount = results.filter(r => r?.loaded).length;
+      console.log(`[GetInspire] Preloaded ${loadedCount}/${preloadPromises.length} sequence frames`);
     }
 
     // Capture multiple frames from canvas elements (for animated canvases)
@@ -412,12 +554,13 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // Generate animation state metadata for inclusion in captured HTML
-    function generateAnimationMetadata(animLibs, gsapState, animeState, hoverStates, canvasFrames) {
+    function generateAnimationMetadata(animLibs, gsapState, animeState, hoverStates, canvasFrames, imageSequences = []) {
       return {
         capturedAt: new Date().toISOString(),
         animationLibraries: Object.entries(animLibs).filter(([k, v]) => v).map(([k]) => k),
         gsap: gsapState,
         anime: animeState,
+        imageSequences: imageSequences.map(s => ({ name: s.baseName, frameCount: s.frameCount })),
         hoverRulesCount: hoverStates.hover.length,
         focusRulesCount: hoverStates.focus.length,
         activeRulesCount: hoverStates.active.length,
@@ -705,6 +848,12 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Trigger scroll animations to ensure all lazy content loads
     await triggerScrollAnimations();
 
+    // Detect and preload image sequences (for scroll-based flipbook animations)
+    const imageSequences = detectImageSequences();
+    if (imageSequences.length > 0) {
+      await preloadImageSequences(imageSequences);
+    }
+
     // Detect animation libraries
     const animationLibraries = detectAnimationLibraries();
 
@@ -726,7 +875,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Generate animation metadata
     const animationMetadata = generateAnimationMetadata(
-      animationLibraries, gsapState, animeState, interactionStates, canvasFramesData
+      animationLibraries, gsapState, animeState, interactionStates, canvasFramesData, imageSequences
     );
 
     console.log('[GetInspire] Animation capture complete:', animationMetadata);
