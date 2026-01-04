@@ -89,7 +89,16 @@ if (startBtn) {
   startBtn.addEventListener('click', async () => {
     console.log('[GetInspire Popup] Start button clicked');
 
-    // Add click animation
+    // Prevent multiple clicks while capturing
+    if (startBtn.disabled) {
+      console.log('[GetInspire Popup] Start button already disabled, ignoring click');
+      return;
+    }
+
+    // Disable button and add click animation
+    startBtn.disabled = true;
+    startBtn.style.opacity = '0.6';
+    startBtn.style.cursor = 'not-allowed';
     startBtn.style.transform = 'scale(0.95)';
     setTimeout(() => {
       startBtn.style.transform = '';
@@ -127,13 +136,24 @@ if (startBtn) {
       });
 
       console.log('[GetInspire Popup] Message sent, response:', response);
-      setStatus('Injecting scripts...');
-      setProgress(20, 100);
+
+      // Check if injection was successful
+      if (response && !response.success) {
+        throw new Error(response.error || 'Failed to inject scripts');
+      }
+
+      setStatus('Scripts injected, processing page...');
+      setProgress(30, 100);
 
     } catch (error) {
       console.error('[GetInspire Popup] Error:', error);
       setStatus('Error: ' + error.message);
       resetProgress();
+
+      // Re-enable button on error
+      startBtn.disabled = false;
+      startBtn.style.opacity = '1';
+      startBtn.style.cursor = 'pointer';
     }
   });
 
@@ -212,6 +232,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       setStatus('Error: ' + (message.error || 'Unknown error'));
       resetProgress();
 
+      // Re-enable start button
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.style.opacity = '1';
+        startBtn.style.cursor = 'pointer';
+      }
+
       // Show alert for critical errors
       if (message.error && message.error.length < 100) {
         setTimeout(() => alert('Capture failed: ' + message.error), 100);
@@ -219,9 +246,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.type === 'DOWNLOAD_SUCCESS') {
       setStatus('Download completed!');
       setProgress(100, 100);
+
+      // Re-enable start button
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.style.opacity = '1';
+        startBtn.style.cursor = 'pointer';
+      }
     } else if (message.type === 'CAPTURE_COMPLETE') {
       setStatus('Capture completed!');
       setProgress(100, 100);
+
+      // Re-enable start button
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.style.opacity = '1';
+        startBtn.style.cursor = 'pointer';
+      }
     }
   } catch (error) {
     console.error('[GetInspire Popup] Error handling message:', error);

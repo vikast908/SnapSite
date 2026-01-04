@@ -1,13 +1,14 @@
 // Enhanced content script for GetInspire with asset downloading and carousel support
+
+// CRITICAL: Check if already running BEFORE the async IIFE to prevent race conditions
+if (window.__GETINSPIRE_RUNNING__) {
+  console.log('[GetInspire] Already running, exiting');
+  throw new Error('GetInspire is already running on this page');
+}
+window.__GETINSPIRE_RUNNING__ = true;
+
 (async function() {
   console.log('[GetInspire] Content script starting...');
-
-  // Check if already running
-  if (window.__GETINSPIRE_RUNNING__) {
-    console.log('[GetInspire] Already running, exiting');
-    return;
-  }
-  window.__GETINSPIRE_RUNNING__ = true;
 
   // Check if JSZip is available
   if (!window.JSZip) {
@@ -383,8 +384,8 @@
 
     // Collect script files
     console.log('[GetInspire] Collecting script files...');
-    const scripts = document.querySelectorAll('script[src]');
-    scripts.forEach(script => {
+    const scriptElements = document.querySelectorAll('script[src]');
+    scriptElements.forEach(script => {
       if (script.src && !script.src.startsWith('data:')) {
         assetsToDownload.set(script.src, {type: 'script', element: script});
       }
@@ -550,7 +551,6 @@
     // Step 5: Get stylesheets and scripts
     console.log('[GetInspire] Capturing stylesheets...');
     const styles = [];
-    const scripts = [];
 
     // Helper function to extract and preserve CSS @property rules
     function extractCSSProperties(cssText) {
@@ -1013,7 +1013,7 @@ Captured: ${new Date().toISOString()}
 - Canvases captured: ${canvases.length}
 - Videos found: ${videos.length}
 - Audio files found: ${audioElements.length}
-- Script files found: ${scripts.length}
+- Script files found: ${scriptElements.length}
 - Fonts extracted: ${[...assetsToDownload.values()].filter(d => d.type === 'font').length}
 
 ## Animation Support
@@ -1080,10 +1080,14 @@ Captured: ${new Date().toISOString()}
     // Clean up
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-    // Send success message
+    // Send success messages
     chrome.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: 'Capture completed!'
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'CAPTURE_COMPLETE'
     });
 
     console.log('[GetInspire] Capture completed successfully!');
