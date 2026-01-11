@@ -102,17 +102,17 @@ body {
 
 .mode-selector .mode-btn:hover {
   color: var(--ui-text);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .mode-selector .mode-btn.selected {
-  background: var(--ui-bg);
-  color: var(--ui-text);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: var(--ui-accent);
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
 }
 
-html[data-theme="dark"] .mode-selector .mode-btn.selected {
-  background: var(--ui-surface);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+.mode-selector .mode-btn.selected:hover {
+  background: #2563eb;
 }
 
 .mode-selector .mode-btn svg {
