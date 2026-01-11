@@ -2105,7 +2105,31 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== CROSS-ORIGIN IFRAME HANDLING (v2.1) ====================
-    console.log('[GetInspire] Creating cross-origin iframe placeholders...');
+    console.log('[GetInspire] Handling cross-origin iframes...');
+
+    // Tracking/analytics iframe patterns to hide completely (no placeholder)
+    const trackingIframePatterns = [
+      /googletagmanager\.com/i,
+      /google-analytics\.com/i,
+      /analytics\./i,
+      /gtm\./i,
+      /facebook\.com\/tr/i,
+      /connect\.facebook/i,
+      /doubleclick\.net/i,
+      /adsense/i,
+      /adservice/i,
+      /hotjar\.com/i,
+      /mouseflow\.com/i,
+      /fullstory\.com/i,
+      /intercom\.io/i,
+      /drift\.com/i,
+      /zendesk\.com/i,
+      /tawk\.to/i,
+      /crisp\.chat/i,
+      /livechat/i,
+      /recaptcha/i,
+      /gstatic\.com.*recaptcha/i,
+    ];
 
     document.querySelectorAll('iframe').forEach(iframe => {
       const src = iframe.src;
@@ -2113,9 +2137,19 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
       try {
         const iframeUrl = new URL(src);
+
+        // Check if this is a tracking/analytics iframe - hide completely
+        const isTrackingIframe = trackingIframePatterns.some(pattern => pattern.test(src));
+        if (isTrackingIframe) {
+          console.log(`[GetInspire] Hiding tracking iframe: ${iframeUrl.hostname}`);
+          iframe.style.display = 'none';
+          iframe.setAttribute('data-gi-tracking-hidden', 'true');
+          return; // Don't create placeholder for tracking iframes
+        }
+
         // Check if cross-origin
         if (iframeUrl.origin !== window.location.origin) {
-          // Create a placeholder for cross-origin iframes
+          // Create a placeholder for cross-origin iframes (non-tracking only)
           const placeholder = document.createElement('div');
           placeholder.className = 'gi-iframe-placeholder';
           placeholder.style.cssText = `
@@ -3593,13 +3627,28 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Clean up stray HTML comment endings that can appear as visible text
     // These come from IE conditional comments or malformed HTML in the original page
     console.log('[GetInspire] Cleaning up stray comment markers...');
-    // Remove standalone --> that appear outside of proper comments
-    finalHtml = finalHtml.replace(/(<body[^>]*>)\s*((?:-->\s*)+)/gi, '$1');
-    // Remove --> at the very beginning after doctype/html
-    finalHtml = finalHtml.replace(/(<!DOCTYPE[^>]*>)\s*((?:-->\s*)+)/gi, '$1');
-    finalHtml = finalHtml.replace(/(<html[^>]*>)\s*((?:-->\s*)+)/gi, '$1');
-    // Remove any orphaned --> --> --> patterns
-    finalHtml = finalHtml.replace(/^\s*((?:-->\s*)+)/gm, '');
+
+    // Remove --> that appear as text content (not inside proper comments)
+    // Pattern: --> not preceded by <!-- (with possible content between)
+    // First, temporarily protect legitimate comments
+    const commentPlaceholders = [];
+    finalHtml = finalHtml.replace(/<!--[\s\S]*?-->/g, (match) => {
+      const placeholder = `__GI_COMMENT_${commentPlaceholders.length}__`;
+      commentPlaceholders.push(match);
+      return placeholder;
+    });
+
+    // Now remove all orphaned --> since legitimate ones are protected
+    finalHtml = finalHtml.replace(/-->\s*/g, '');
+
+    // Restore legitimate comments
+    commentPlaceholders.forEach((comment, index) => {
+      finalHtml = finalHtml.replace(`__GI_COMMENT_${index}__`, comment);
+    });
+
+    // Also remove orphaned <!-- that might remain (incomplete comments)
+    // Only remove if there's no matching --> nearby
+    finalHtml = finalHtml.replace(/<!--(?![^]*?-->)/g, '');
 
     // SCRIPTS PRESERVED - No removal (user requested local viewing without security restrictions)
     // Scripts are kept as-is, URLs updated to local paths where downloaded
