@@ -1123,35 +1123,82 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       return urls;
     }
 
-    // ==================== IMAGE COLLECTION (Enhanced) ====================
+    // ==================== IMAGE COLLECTION (Enhanced v2.1) ====================
     console.log('[GetInspire] Collecting images...');
 
-    // Standard img elements
+    // Standard img elements - comprehensive capture
     const images = document.querySelectorAll('img');
+    let imgCount = 0;
     images.forEach(img => {
-      // Main src
-      if (img.src) addAsset(img.src, 'image', img);
+      // Main src attribute
+      if (img.src && !img.src.startsWith('data:')) {
+        addAsset(img.src, 'image', img);
+        imgCount++;
+      }
+
+      // currentSrc - the actually loaded image (important for responsive/lazy images)
+      if (img.currentSrc && img.currentSrc !== img.src && !img.currentSrc.startsWith('data:')) {
+        addAsset(img.currentSrc, 'image', img, { isCurrentSrc: true });
+        imgCount++;
+      }
+
+      // Get src from attribute directly (in case .src property differs)
+      const srcAttr = img.getAttribute('src');
+      if (srcAttr && !srcAttr.startsWith('data:') && srcAttr !== img.src) {
+        // Convert relative URL to absolute
+        try {
+          const absoluteUrl = new URL(srcAttr, window.location.href).href;
+          addAsset(absoluteUrl, 'image', img, { isRelative: true });
+          imgCount++;
+        } catch (e) {}
+      }
 
       // Srcset for responsive images
       if (img.srcset) {
         parseSrcset(img.srcset).forEach(url => addAsset(url, 'image', img, { isSrcset: true }));
       }
 
-      // Data attributes for lazy loading (common patterns)
-      const lazyAttrs = ['data-src', 'data-lazy', 'data-original', 'data-url', 'data-image',
-                         'data-lazy-src', 'data-srcset', 'data-bg', 'data-background',
-                         'data-hi-res', 'data-retina', 'data-full', 'data-zoom'];
+      // Data attributes for lazy loading (comprehensive list)
+      const lazyAttrs = [
+        'data-src', 'data-lazy', 'data-original', 'data-url', 'data-image',
+        'data-lazy-src', 'data-srcset', 'data-bg', 'data-background',
+        'data-hi-res', 'data-retina', 'data-full', 'data-zoom',
+        'data-thumb', 'data-large', 'data-medium', 'data-small',
+        'data-fallback', 'data-load', 'data-img', 'data-picture',
+        'data-delayed-src', 'data-lazyload', 'data-interchange'
+      ];
       lazyAttrs.forEach(attr => {
         const val = img.getAttribute(attr);
-        if (val) {
+        if (val && !val.startsWith('data:')) {
           if (attr.includes('srcset')) {
             parseSrcset(val).forEach(url => addAsset(url, 'image', img, { isLazy: true }));
           } else {
-            addAsset(val, 'image', img, { isLazy: true });
+            // Convert relative to absolute
+            try {
+              const absoluteUrl = new URL(val, window.location.href).href;
+              addAsset(absoluteUrl, 'image', img, { isLazy: true });
+            } catch (e) {
+              addAsset(val, 'image', img, { isLazy: true });
+            }
           }
         }
       });
+
+      // Check ALL attributes for potential image URLs
+      for (const attr of img.attributes) {
+        if (attr.value && !attr.value.startsWith('data:') &&
+            (attr.value.includes('.png') || attr.value.includes('.jpg') ||
+             attr.value.includes('.jpeg') || attr.value.includes('.gif') ||
+             attr.value.includes('.webp') || attr.value.includes('.svg') ||
+             attr.value.includes('.avif') || attr.value.includes('.ico'))) {
+          try {
+            const absoluteUrl = new URL(attr.value, window.location.href).href;
+            addAsset(absoluteUrl, 'image', img, { fromAttr: attr.name });
+          } catch (e) {}
+        }
+      }
     });
+    console.log(`[GetInspire] Found ${imgCount} image sources from ${images.length} img elements`);
 
     // Picture elements with multiple sources
     const pictures = document.querySelectorAll('picture');
@@ -1850,25 +1897,32 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       try {
         const urlObj = new URL(url);
         const patterns = [
-          url, // Full URL
-          urlObj.pathname, // Just the path
-          urlObj.pathname.replace(/^\//, ''), // Path without leading slash
+          url, // Full URL: https://example.com/path/image.png
+          urlObj.protocol + '//' + urlObj.host + urlObj.pathname, // Without query string
+          '//' + urlObj.host + urlObj.pathname, // Protocol-relative: //example.com/path/image.png
+          urlObj.pathname, // Just the path: /path/image.png
+          urlObj.pathname.replace(/^\//, ''), // Path without leading slash: path/image.png
+          urlObj.pathname.split('/').pop(), // Just filename: image.png
         ];
 
+        // Also add the original src attribute value if different
+        const originalSrc = url.replace(window.location.origin, '');
+        if (!patterns.includes(originalSrc)) {
+          patterns.push(originalSrc);
+        }
+
         patterns.forEach(pattern => {
-          // Skip very short patterns to avoid false positives (e.g., matching inside data: URIs)
-          if (!pattern || pattern.length < 5) {
+          // Skip very short patterns to avoid false positives
+          if (!pattern || pattern.length < 3) {
             return;
           }
 
-          // Use a more specific regex that requires the URL to be in an attribute context
-          // This prevents matching inside data: URIs or other embedded content
           const escapedPattern = escapeForRegex(pattern);
 
-          // Only replace in src, href, url(), or srcset contexts - not inside data: URIs
-          // Match pattern when preceded by: src=", href=", url(, srcset=" or when it's the URL in url()
+          // Comprehensive attribute matching for image replacement
+          const attrNames = 'src|href|poster|data-src|data-lazy|data-original|data-url|data-image|data-bg|data-background|srcset';
           const contextualRegex = new RegExp(
-            `((?:src|href|poster|data-src|data-lazy)=["'])${escapedPattern}(["'])` +
+            `((?:${attrNames})\\s*=\\s*["'])${escapedPattern}(["'])` +
             `|(url\\(["']?)${escapedPattern}(["']?\\))`,
             'gi'
           );
@@ -2578,18 +2632,54 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       return `url("") /* GetInspire: font not available offline: ${path} */`;
     });
 
-    // For images/SVGs with root-relative paths
-    finalHtml = finalHtml.replace(/(src|href|poster)\s*=\s*["'](\/[^"']+\.(svg|png|jpg|jpeg|gif|webp|ico))["']/gi, (match, attr, path) => {
-      const fullUrl = new URL(path, window.location.href).href;
-      const assetData = downloadedAssets.get(fullUrl);
+    // For images/SVGs with any path pattern (root-relative, relative, or absolute)
+    // This is a second pass to catch anything missed in the first pass
+    console.log('[GetInspire] Second pass: replacing remaining image URLs...');
+    let secondPassReplacements = 0;
+
+    // Helper to find asset in downloaded assets by various URL patterns
+    function findDownloadedAsset(srcPath) {
+      // Try direct match first
+      if (downloadedAssets.has(srcPath)) return downloadedAssets.get(srcPath);
+
+      // Try with full URL
+      try {
+        const fullUrl = new URL(srcPath, window.location.href).href;
+        if (downloadedAssets.has(fullUrl)) return downloadedAssets.get(fullUrl);
+      } catch (e) {}
+
+      // Try to find by filename match
+      const filename = srcPath.split('/').pop().split('?')[0];
+      for (const [url, data] of downloadedAssets) {
+        if (url.endsWith('/' + filename) || url.endsWith(filename)) {
+          return data;
+        }
+      }
+
+      return null;
+    }
+
+    // Replace ALL image src attributes that still have http/https or relative URLs
+    finalHtml = finalHtml.replace(/(src|href|poster)\s*=\s*["']([^"']+\.(svg|png|jpg|jpeg|gif|webp|ico|avif)(?:\?[^"']*)?)["']/gi, (match, attr, path) => {
+      // Skip if already replaced (data: URI or assets/ path)
+      if (path.startsWith('data:') || path.startsWith('assets/')) {
+        return match;
+      }
+
+      const assetData = findDownloadedAsset(path);
       if (assetData && assetData.base64) {
+        secondPassReplacements++;
         return `${attr}="${assetData.base64}"`;
       } else if (assetData && assetData.filename) {
+        secondPassReplacements++;
         return `${attr}="assets/${assetData.filename}"`;
       }
-      // If not downloaded, use a placeholder or empty
-      return `${attr}="" data-original-src="${path}" /* GetInspire: asset not available */`;
+
+      // Keep original if not found (might be external)
+      return match;
     });
+
+    console.log(`[GetInspire] Second pass replaced ${secondPassReplacements} image URLs`);
 
     // Remove original <link rel="stylesheet"> tags since CSS is now inlined
     // This prevents the browser from trying to load external CSS files that don't exist offline
