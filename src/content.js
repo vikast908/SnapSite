@@ -2601,6 +2601,17 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Also remove preload links for stylesheets
     finalHtml = finalHtml.replace(/<link[^>]*rel=["']preload["'][^>]*as=["']style["'][^>]*>/gi, '<!-- GetInspire: preload removed -->');
 
+    // Clean up stray HTML comment endings that can appear as visible text
+    // These come from IE conditional comments or malformed HTML in the original page
+    console.log('[GetInspire] Cleaning up stray comment markers...');
+    // Remove standalone --> that appear outside of proper comments
+    finalHtml = finalHtml.replace(/(<body[^>]*>)\s*((?:-->\s*)+)/gi, '$1');
+    // Remove --> at the very beginning after doctype/html
+    finalHtml = finalHtml.replace(/(<!DOCTYPE[^>]*>)\s*((?:-->\s*)+)/gi, '$1');
+    finalHtml = finalHtml.replace(/(<html[^>]*>)\s*((?:-->\s*)+)/gi, '$1');
+    // Remove any orphaned --> --> --> patterns
+    finalHtml = finalHtml.replace(/^\s*((?:-->\s*)+)/gm, '');
+
     // SCRIPTS PRESERVED - No removal (user requested local viewing without security restrictions)
     // Scripts are kept as-is, URLs updated to local paths where downloaded
     console.log('[GetInspire] Keeping all scripts (security restrictions disabled)...');
