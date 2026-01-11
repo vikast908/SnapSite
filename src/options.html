@@ -183,44 +183,6 @@
       font-weight: 500;
     }
 
-    /* Theme selector */
-    .theme-selector {
-      display: flex;
-      gap: 10px;
-    }
-
-    .theme-option {
-      flex: 1;
-      padding: 12px;
-      border: 2px solid var(--ui-stroke);
-      border-radius: 10px;
-      background: var(--ui-muted-surface);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-align: center;
-      font-size: 14px;
-      color: var(--ui-text);
-    }
-
-    .theme-option:hover {
-      border-color: var(--ui-accent);
-      background: rgba(59, 130, 246, 0.05);
-    }
-
-    .theme-option input[type="radio"] {
-      display: none;
-    }
-
-    .theme-option input[type="radio"]:checked + .theme-label {
-      font-weight: 600;
-    }
-
-    .theme-option:has(input[type="radio"]:checked) {
-      border-color: var(--ui-accent);
-      background: rgba(59, 130, 246, 0.1);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
     /* Buttons */
     .button-group {
       display: flex;
@@ -336,34 +298,6 @@
         Settings
       </h1>
       <p>Customize how GetInspire captures and saves web pages</p>
-    </div>
-
-    <!-- Theme Section -->
-    <div class="settings-section">
-      <h2 class="section-title">
-        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="5"/>
-          <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>
-        </svg>
-        Appearance
-      </h2>
-      <div class="form-group">
-        <label class="form-label">Theme</label>
-        <div class="theme-selector">
-          <label class="theme-option">
-            <input type="radio" name="theme" id="themeAuto" value="auto">
-            <span class="theme-label">Auto</span>
-          </label>
-          <label class="theme-option">
-            <input type="radio" name="theme" id="themeLight" value="light">
-            <span class="theme-label">Light</span>
-          </label>
-          <label class="theme-option">
-            <input type="radio" name="theme" id="themeDark" value="dark">
-            <span class="theme-label">Dark</span>
-          </label>
-        </div>
-      </div>
     </div>
 
     <!-- Performance Section -->

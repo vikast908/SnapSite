@@ -41,18 +41,14 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
     saved: document.getElementById('saved'),
     presetSocial: document.getElementById('presetSocial'),
     presetSearch: document.getElementById('presetSearch'),
-    themeAuto: document.getElementById('themeAuto'),
-    themeLight: document.getElementById('themeLight'),
-    themeDark: document.getElementById('themeDark'),
   };
 
   // Load settings from storage
   function loadSettings() {
     console.log('[GetInspire Options] Loading settings...');
 
-    browserAPI.storage.sync.get(['getinspireOptions', 'getinspireTheme'], (result) => {
+    browserAPI.storage.sync.get(['getinspireOptions'], (result) => {
       const options = result.getinspireOptions || {};
-      const theme = result.getinspireTheme || 'auto';
 
       // Load number inputs (convert milliseconds to seconds for display)
       els.maxMillis.value = Math.floor((options.maxMillis ?? defaults.maxMillis) / 1000);
@@ -72,11 +68,6 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
       // Load denylist
       const denylist = options.denylist ?? defaults.denylist;
       els.denylist.value = Array.isArray(denylist) ? denylist.join('\n') : '';
-
-      // Load theme
-      els.themeAuto.checked = (theme === 'auto');
-      els.themeLight.checked = (theme === 'light');
-      els.themeDark.checked = (theme === 'dark');
 
       console.log('[GetInspire Options] Settings loaded successfully');
     });
@@ -114,15 +105,9 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
       denylist: denylistLines
     };
 
-    // Get selected theme
-    let theme = 'auto';
-    if (els.themeLight.checked) theme = 'light';
-    else if (els.themeDark.checked) theme = 'dark';
-
     // Save to storage
     browserAPI.storage.sync.set({
-      getinspireOptions: options,
-      getinspireTheme: theme
+      getinspireOptions: options
     }, () => {
       console.log('[GetInspire Options] Settings saved successfully');
 
@@ -131,11 +116,6 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
       setTimeout(() => {
         els.saved.classList.remove('show');
       }, 2000);
-
-      // Update theme immediately
-      if (window.getInspireTheme) {
-        window.getInspireTheme.set(theme);
-      }
     });
   }
 
@@ -231,22 +211,6 @@ const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
       els.denylist.style.borderColor = '';
     });
   }
-
-  // Add theme change listeners for immediate feedback
-  [els.themeAuto, els.themeLight, els.themeDark].forEach(radio => {
-    if (!radio) return;
-
-    radio.addEventListener('change', () => {
-      let theme = 'auto';
-      if (els.themeLight.checked) theme = 'light';
-      else if (els.themeDark.checked) theme = 'dark';
-
-      // Apply theme immediately (before save)
-      if (window.getInspireTheme) {
-        window.getInspireTheme.set(theme);
-      }
-    });
-  });
 
   // Initialize: Load settings when page is ready
   if (document.readyState === 'loading') {
