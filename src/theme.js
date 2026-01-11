@@ -1,6 +1,8 @@
 // Lightweight theme manager for extension pages (popup/options/setup)
 // Exposes window.getInspireTheme with get/set/cycle helpers and applies on load.
 (function(){
+  // Cross-browser compatibility
+  const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
   const KEY = 'getinspireTheme'; // 'auto' | 'light' | 'dark'
   let current = 'auto';
   let mql = null;
@@ -42,7 +44,7 @@
 
   function get(cb){
     try {
-      chrome.storage?.sync?.get(KEY, (obj) => {
+      browserAPI.storage?.sync?.get(KEY, (obj) => {
         const v = obj && obj[KEY];
         const mode = (v === 'light' || v === 'dark' || v === 'auto') ? v : 'auto';
         cb(mode);
@@ -55,7 +57,7 @@
   function set(mode, cb){
     const v = (mode === 'light' || mode === 'dark') ? mode : 'auto';
     try {
-      chrome.storage?.sync?.set({ [KEY]: v }, () => {
+      browserAPI.storage?.sync?.set({ [KEY]: v }, () => {
         apply(v);
         cb && cb(v);
       });
@@ -79,7 +81,7 @@
 
   async function updateActionIcon(eff){
     if (!chrome?.action?.setIcon) return;
-    const base = (p) => chrome.runtime.getURL(p);
+    const base = (p) => browserAPI.runtime.getURL(p);
     const darkSet = {
       16: 'assets/icons-dark/16.png',
       32: 'assets/icons-dark/32.png',
@@ -101,7 +103,7 @@
       const ok = await exists(darkSet[16]);
       use = ok ? darkSet : lightSet;
     }
-    try { await chrome.action.setIcon({ path: Object.fromEntries(Object.entries(use).map(([k,v])=>[k, base(v)])) }); } catch {}
+    try { await browserAPI.action.setIcon({ path: Object.fromEntries(Object.entries(use).map(([k,v])=>[k, base(v)])) }); } catch {}
   }
 
   // Expose API for pages to use

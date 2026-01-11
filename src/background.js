@@ -1,4 +1,6 @@
 // GetInspire 2.0 Background Script with Multi-Page Crawling Support
+// Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
+const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 console.log('[GetInspire BG] Background script loaded (v2.0)');
 
 // Track which tabs are currently capturing to prevent duplicate injections
@@ -36,7 +38,7 @@ function resetCrawlState() {
 
 // ==================== MESSAGE HANDLING ====================
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[GetInspire BG] Received message:', message.type);
 
   switch (message.type) {
@@ -68,8 +70,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleDownloadZip(message.data);
       break;
 
-    case 'SAVE_MHTML':
-      handleSaveMhtml(message.tabId, sendResponse);
+    case 'FETCH_ASSET':
+      handleFetchAsset(message.url, sendResponse);
       return true;
 
     case 'CAPTURE_COMPLETE':
@@ -112,7 +114,7 @@ async function handleStartCapture(tabId, sendResponse) {
 
   try {
     // First, inject JSZip
-    await chrome.scripting.executeScript({
+    await browserAPI.scripting.executeScript({
       target: { tabId: tabId },
       files: ['src/vendor/jszip.min.js']
     });
@@ -121,8 +123,14 @@ async function handleStartCapture(tabId, sendResponse) {
     // Small delay to ensure JSZip is fully loaded
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    // Inject browser polyfill for cross-browser compatibility
+    await browserAPI.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ['src/browser-polyfill.js']
+    });
+
     // Then inject content script
-    await chrome.scripting.executeScript({
+    await browserAPI.scripting.executeScript({
       target: { tabId: tabId },
       files: ['src/content.js']
     });
@@ -134,52 +142,42 @@ async function handleStartCapture(tabId, sendResponse) {
     capturingTabs.delete(tabId);
     sendResponse({ success: false, error: error.message });
 
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_ERROR',
       error: error.message
     }).catch(() => {});
   }
 }
 
-// ==================== MHTML CAPTURE ====================
+// ==================== FETCH ASSET (Background has more permissions) ====================
 
-async function handleSaveMhtml(tabId, sendResponse) {
-  console.log('[GetInspire BG] Saving page as MHTML for tab:', tabId);
+async function handleFetchAsset(url, sendResponse) {
+  console.log('[GetInspire BG] Fetching asset:', url.substring(0, 60) + '...');
 
   try {
-    // Get tab info for filename
-    const tab = await chrome.tabs.get(tabId);
-    const url = new URL(tab.url);
-    const hostname = url.hostname.replace(/^www\./, '');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `${hostname}-${timestamp}.mhtml`;
+    const response = await fetch(url, {
+      mode: 'cors',
+      credentials: 'include',
+      cache: 'force-cache'
+    });
 
-    // Capture as MHTML
-    const mhtmlBlob = await chrome.pageCapture.saveAsMHTML({ tabId: tabId });
+    if (!response.ok) {
+      sendResponse({ success: false, error: `HTTP ${response.status}` });
+      return;
+    }
 
-    // Convert blob to data URL for download
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const dataUrl = reader.result;
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-      // Download the MHTML file
-      await chrome.downloads.download({
-        url: dataUrl,
-        filename: filename,
-        saveAs: true
-      });
-
-      console.log('[GetInspire BG] MHTML saved:', filename);
-      sendResponse({ success: true, filename: filename });
-    };
-    reader.onerror = () => {
-      console.error('[GetInspire BG] Failed to read MHTML blob');
-      sendResponse({ success: false, error: 'Failed to read MHTML data' });
-    };
-    reader.readAsDataURL(mhtmlBlob);
-
+    sendResponse({
+      success: true,
+      data: base64,
+      mimeType: blob.type,
+      size: blob.size
+    });
   } catch (error) {
-    console.error('[GetInspire BG] Failed to save MHTML:', error);
+    console.warn('[GetInspire BG] Failed to fetch asset:', error.message);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -196,7 +194,7 @@ async function handleStartCrawl(tabId, options, sendResponse) {
 
   try {
     // Get the current tab URL
-    const tab = await chrome.tabs.get(tabId);
+    const tab = await browserAPI.tabs.get(tabId);
     const startUrl = tab.url;
     const urlObj = new URL(startUrl);
 
@@ -287,7 +285,7 @@ async function processNextPage() {
   console.log(`[GetInspire BG] Crawling page ${crawlState.pageCount}/${crawlState.maxPages}: ${nextUrl}`);
 
   // Update popup with progress
-  chrome.runtime.sendMessage({
+  browserAPI.runtime.sendMessage({
     type: 'CRAWL_PROGRESS',
     current: crawlState.pageCount,
     total: Math.min(crawlState.maxPages, crawlState.queue.length + crawlState.pageCount),
@@ -296,7 +294,7 @@ async function processNextPage() {
 
   try {
     // Navigate to the URL
-    await chrome.tabs.update(crawlState.currentTabId, { url: nextUrl });
+    await browserAPI.tabs.update(crawlState.currentTabId, { url: nextUrl });
 
     // Wait for page to load
     await waitForPageLoad(crawlState.currentTabId);
@@ -322,7 +320,7 @@ async function waitForPageLoad(tabId, timeoutMs = 30000) {
 
     const checkComplete = async () => {
       try {
-        const tab = await chrome.tabs.get(tabId);
+        const tab = await browserAPI.tabs.get(tabId);
         if (tab.status === 'complete') {
           resolve();
         } else if (Date.now() - startTime > timeoutMs) {
@@ -342,7 +340,7 @@ async function waitForPageLoad(tabId, timeoutMs = 30000) {
 async function injectCrawlScripts(tabId, baseDomain) {
   try {
     // Set crawl mode variables
-    await chrome.scripting.executeScript({
+    await browserAPI.scripting.executeScript({
       target: { tabId: tabId },
       func: (domain) => {
         window.__GETINSPIRE_CRAWL_MODE__ = true;
@@ -352,15 +350,21 @@ async function injectCrawlScripts(tabId, baseDomain) {
     });
 
     // Inject JSZip (still needed for individual page processing)
-    await chrome.scripting.executeScript({
+    await browserAPI.scripting.executeScript({
       target: { tabId: tabId },
       files: ['src/vendor/jszip.min.js']
     });
 
     await new Promise(r => setTimeout(r, 100));
 
+    // Inject browser polyfill for cross-browser compatibility
+    await browserAPI.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ['src/browser-polyfill.js']
+    });
+
     // Inject content script
-    await chrome.scripting.executeScript({
+    await browserAPI.scripting.executeScript({
       target: { tabId: tabId },
       files: ['src/content.js']
     });
@@ -436,7 +440,7 @@ async function finishCrawl() {
   }
 
   // Send completion message
-  chrome.runtime.sendMessage({
+  browserAPI.runtime.sendMessage({
     type: 'CRAWL_COMPLETE',
     pageCount: crawlState.pages.length,
     duration: Date.now() - crawlState.startTime
@@ -448,7 +452,7 @@ async function finishCrawl() {
 async function generateCrawlZip() {
   console.log('[GetInspire BG] Generating crawl ZIP...');
 
-  chrome.runtime.sendMessage({
+  browserAPI.runtime.sendMessage({
     type: 'CAPTURE_STATUS',
     status: `Generating ZIP with ${crawlState.pages.length} pages...`
   }).catch(() => {});
@@ -504,7 +508,7 @@ async function generateCrawlZip() {
     // Since background service workers have limited blob handling,
     // we'll use a different approach - inject into current tab
 
-    await chrome.scripting.executeScript({
+    await browserAPI.scripting.executeScript({
       target: { tabId: crawlState.currentTabId },
       func: async (pagesData, indexContent, zipFilename) => {
         // Create ZIP using JSZip (should already be loaded)
@@ -562,7 +566,7 @@ Generated by GetInspire 2.0
 
   } catch (error) {
     console.error('[GetInspire BG] Failed to generate crawl ZIP:', error);
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_ERROR',
       error: 'Failed to generate ZIP: ' + error.message
     }).catch(() => {});
@@ -600,17 +604,17 @@ async function handleDownloadZip(data) {
     const blob = new Blob([data.zipData], { type: 'application/zip' });
     const url = URL.createObjectURL(blob);
 
-    await chrome.downloads.download({
+    await browserAPI.downloads.download({
       url: url,
       filename: data.filename,
       saveAs: true
     });
 
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    chrome.runtime.sendMessage({ type: 'DOWNLOAD_SUCCESS' }).catch(() => {});
+    browserAPI.runtime.sendMessage({ type: 'DOWNLOAD_SUCCESS' }).catch(() => {});
   } catch (error) {
     console.error('[GetInspire BG] Download failed:', error);
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'DOWNLOAD_ERROR',
       error: error.message
     }).catch(() => {});
@@ -628,7 +632,7 @@ setInterval(() => {
 
     if (usagePercent > 80) {
       console.warn('[GetInspire BG] High memory usage:', usagePercent + '%');
-      chrome.runtime.sendMessage({
+      browserAPI.runtime.sendMessage({
         type: 'MEMORY_WARNING',
         percent: usagePercent
       }).catch(() => {});

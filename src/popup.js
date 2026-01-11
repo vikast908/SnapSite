@@ -1,4 +1,6 @@
 // Popup script for GetInspire 2.0
+// Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
+const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 console.log('[GetInspire Popup] Loaded (v2.0)');
 
 // Get DOM elements
@@ -15,13 +17,12 @@ const themeIcon = document.getElementById('themeIcon');
 
 // v2.0 DOM elements
 const singleModeBtn = document.getElementById('singleModeBtn');
-const mhtmlModeBtn = document.getElementById('mhtmlModeBtn');
 const crawlModeBtn = document.getElementById('crawlModeBtn');
 const crawlOptions = document.getElementById('crawlOptions');
 const maxPagesInput = document.getElementById('maxPages');
 
 // State tracking
-let captureMode = 'single'; // 'single', 'mhtml', or 'crawl'
+let captureMode = 'single'; // 'single' or 'crawl'
 let startedAt = null;
 let lastDone = 0;
 let lastTotal = 1;
@@ -46,7 +47,7 @@ function setModeUI(mode) {
   captureMode = mode;
 
   // Update all mode buttons
-  const allBtns = [singleModeBtn, mhtmlModeBtn, crawlModeBtn];
+  const allBtns = [singleModeBtn, crawlModeBtn];
   allBtns.forEach(btn => {
     if (btn) {
       btn.classList.remove('selected');
@@ -58,10 +59,6 @@ function setModeUI(mode) {
   if (mode === 'single' && singleModeBtn) {
     singleModeBtn.classList.add('selected');
     singleModeBtn.setAttribute('aria-pressed', 'true');
-    if (crawlOptions) crawlOptions.style.display = 'none';
-  } else if (mode === 'mhtml' && mhtmlModeBtn) {
-    mhtmlModeBtn.classList.add('selected');
-    mhtmlModeBtn.setAttribute('aria-pressed', 'true');
     if (crawlOptions) crawlOptions.style.display = 'none';
   } else if (mode === 'crawl' && crawlModeBtn) {
     crawlModeBtn.classList.add('selected');
@@ -83,15 +80,6 @@ if (singleModeBtn) {
     if (captureMode !== 'single' && !isCrawling) {
       setModeUI('single');
       setStatus('Ready to capture this page');
-    }
-  });
-}
-
-if (mhtmlModeBtn) {
-  mhtmlModeBtn.addEventListener('click', () => {
-    if (captureMode !== 'mhtml' && !isCrawling) {
-      setModeUI('mhtml');
-      setStatus('Ready to save as MHTML (keeps scripts)');
     }
   });
 }
@@ -164,7 +152,7 @@ if (startBtn) {
 
     try {
       // Get the active tab
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
 
       if (!tab) {
         throw new Error('No active tab found');
@@ -197,7 +185,7 @@ if (startBtn) {
         if (stopBtn) stopBtn.disabled = false;
 
         // Send START_CRAWL message to background
-        const response = await chrome.runtime.sendMessage({
+        const response = await browserAPI.runtime.sendMessage({
           type: 'START_CRAWL',
           tabId: tab.id,
           options: {
@@ -215,38 +203,13 @@ if (startBtn) {
         setStatus('Crawling site...');
         setProgress(10, 100);
 
-      } else if (captureMode === 'mhtml') {
-        // ==================== MHTML MODE ====================
-        setStatus('Saving as MHTML...');
-        setProgress(50, 100);
-
-        // Send SAVE_MHTML message to background
-        const response = await chrome.runtime.sendMessage({
-          type: 'SAVE_MHTML',
-          tabId: tab.id
-        });
-
-        console.log('[GetInspire Popup] MHTML message sent, response:', response);
-
-        if (response && response.success) {
-          setStatus(`Saved: ${response.filename}`);
-          setProgress(100, 100);
-        } else {
-          throw new Error(response?.error || 'Failed to save MHTML');
-        }
-
-        // Re-enable start button
-        startBtn.disabled = false;
-        startBtn.style.opacity = '1';
-        startBtn.style.cursor = 'pointer';
-
       } else {
         // ==================== SINGLE PAGE MODE ====================
         setStatus('Starting capture...');
         setProgress(10, 100);
 
         // Send message to background script to start capture
-        const response = await chrome.runtime.sendMessage({
+        const response = await browserAPI.runtime.sendMessage({
           type: 'START_CAPTURE',
           tabId: tab.id
         });
@@ -292,11 +255,11 @@ if (stopBtn) {
 
     if (isCrawling) {
       setStatus('Stopping crawl...');
-      const response = await chrome.runtime.sendMessage({ type: 'STOP_CRAWL' });
+      const response = await browserAPI.runtime.sendMessage({ type: 'STOP_CRAWL' });
       console.log('[GetInspire Popup] Stop crawl response:', response);
     } else {
       setStatus('Stopping...');
-      chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
+      browserAPI.runtime.sendMessage({ type: 'STOP_CAPTURE' });
     }
   });
 }
@@ -312,7 +275,7 @@ if (openOptionsLink) {
       openOptionsLink.style.transform = '';
     }, 200);
 
-    chrome.windows.create({
+    browserAPI.windows.create({
       url: 'src/options.html',
       type: 'popup',
       width: 900,
@@ -331,7 +294,7 @@ if (openOptionsLink) {
 }
 
 // Listen for messages from background/content scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[GetInspire Popup] Received message:', message.type);
 
   try {
@@ -493,7 +456,7 @@ function applyTheme(theme) {
   updateThemeIcon(theme);
 
   // Save theme
-  chrome.storage.sync.set({ getinspireTheme: theme });
+  browserAPI.storage.sync.set({ getinspireTheme: theme });
 }
 
 // Cycle through themes: auto -> light -> dark -> auto
@@ -509,7 +472,7 @@ function cycleTheme() {
 }
 
 // Load initial theme
-chrome.storage.sync.get(['getinspireTheme'], (result) => {
+browserAPI.storage.sync.get(['getinspireTheme'], (result) => {
   const theme = result.getinspireTheme || 'auto';
   applyTheme(theme);
 });

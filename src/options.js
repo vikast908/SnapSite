@@ -1,9 +1,12 @@
 // Options page functionality for GetInspire
+// Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
+const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+
 (async () => {
   console.log('[GetInspire Options] Initializing...');
 
   // Load shared defaults
-  const { defaults } = await import(chrome.runtime.getURL('src/defaults.js')).catch(() => ({
+  const { defaults } = await import(browserAPI.runtime.getURL('src/defaults.js')).catch(() => ({
     defaults: {
       maxMillis: 20_000,
       maxAssets: 5000,
@@ -47,7 +50,7 @@
   function loadSettings() {
     console.log('[GetInspire Options] Loading settings...');
 
-    chrome.storage.sync.get(['getinspireOptions', 'getinspireTheme'], (result) => {
+    browserAPI.storage.sync.get(['getinspireOptions', 'getinspireTheme'], (result) => {
       const options = result.getinspireOptions || {};
       const theme = result.getinspireTheme || 'auto';
 
@@ -117,7 +120,7 @@
     else if (els.themeDark.checked) theme = 'dark';
 
     // Save to storage
-    chrome.storage.sync.set({
+    browserAPI.storage.sync.set({
       getinspireOptions: options,
       getinspireTheme: theme
     }, () => {

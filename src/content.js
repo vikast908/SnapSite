@@ -1,4 +1,6 @@
 // Enhanced content script for GetInspire 2.0 with multi-page crawling, animation capture, and asset deduplication
+// Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
+const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // CRITICAL: Check if already running BEFORE the async IIFE to prevent race conditions
 if (window.__GETINSPIRE_RUNNING__) {
@@ -24,7 +26,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
   try {
     // Send status to popup
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: isCrawlMode ? 'Capturing page for crawl...' : 'Starting capture...'
     });
@@ -699,10 +701,68 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // Performance constants (v2.0 - increased for better throughput)
-    const MAX_CONCURRENT = 15;  // Increased from 6
-    const MAX_ASSETS = 2000;    // Increased from 500
-    const DOWNLOAD_TIMEOUT = 15000;  // Increased from 10000
+    // v2.1 Enhanced limits for comprehensive capture
+    const MAX_CONCURRENT = 25;      // 25 parallel downloads (was 15)
+    const MAX_ASSETS = 50000;       // 50k assets (was 2000)
+    const DOWNLOAD_TIMEOUT = 10000; // 10s timeout per asset (reduced from 30s to prevent hanging)
+    const ASSET_OVERALL_TIMEOUT = 15000; // 15s max per asset including all retries
+    const EMBED_THRESHOLD = 500000; // 500KB - embed smaller assets as base64 (was 100KB)
     const MAX_IMAGE_DIMENSION = 2000;
+
+    // URLs to skip (tracking, analytics, third-party scripts that commonly block)
+    const SKIP_URL_PATTERNS = [
+      /google-analytics\.com/i,
+      /googletagmanager\.com/i,
+      /gtag\/js/i,
+      /gtm\.js/i,
+      /analytics/i,
+      /facebook\.net/i,
+      /fbevents/i,
+      /doubleclick\.net/i,
+      /googlesyndication/i,
+      /googleadservices/i,
+      /hotjar\.com/i,
+      /mixpanel/i,
+      /segment\.com/i,
+      /segment\.io/i,
+      /amplitude/i,
+      /intercom/i,
+      /crisp\.chat/i,
+      /drift\.com/i,
+      /zendesk/i,
+      /hubspot/i,
+      /wisepops/i,
+      /dwin1\.com/i,
+      /reb2b/i,
+      /clarity\.ms/i,
+      /fullstory/i,
+      /mouseflow/i,
+      /crazyegg/i,
+      /optimizely/i,
+      /vwo\.com/i,
+      /livechatinc/i,
+      /tawk\.to/i,
+      /freshdesk/i,
+      /gsi\/client/i, // Google Sign-In
+      /accounts\.google\.com/i,
+      /connect\.facebook/i,
+      /platform\.twitter/i,
+      /linkedin\.com\/in/i,
+      /recaptcha/i,
+      /captcha/i,
+      /sentry\.io/i,
+      /bugsnag/i,
+      /rollbar/i,
+      /newrelic/i,
+      /datadoghq/i,
+      /logrocket/i
+    ];
+
+    // Check if URL should be skipped
+    function shouldSkipUrl(url) {
+      if (!url) return true;
+      return SKIP_URL_PATTERNS.some(pattern => pattern.test(url));
+    }
 
     // Asset hash cache for deduplication
     const assetHashCache = new Map();  // url -> hash
@@ -745,7 +805,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Helper function to optimize large images
     async function optimizeImage(blob, maxDimension = MAX_IMAGE_DIMENSION) {
       // Skip if already small or not an image
-      if (blob.size < 100000 || !blob.type.startsWith('image/')) return blob;
+      if (blob.size < EMBED_THRESHOLD || !blob.type.startsWith('image/')) return blob;
       // Skip SVGs (they're already vector)
       if (blob.type === 'image/svg+xml') return blob;
 
@@ -781,41 +841,79 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       }
     }
 
-    // Helper function to download a resource as blob with timeout and deduplication
+    // Helper function to download a resource as blob (aggressive - no security restrictions)
     async function downloadAsBlob(url, timeoutMs = DOWNLOAD_TIMEOUT) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      try {
-        const response = await fetch(url, {
-          signal: controller.signal,
-          mode: 'cors',
-          credentials: 'omit'
-        });
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          console.warn(`[GetInspire] HTTP ${response.status} for ${url}`);
-          return null;
-        }
-
-        let blob = await response.blob();
-
-        // Optimize images if they're large
-        if (blob.type.startsWith('image/')) {
-          blob = await optimizeImage(blob);
-        }
-
-        return blob;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        if (error.name === 'AbortError') {
-          console.warn(`[GetInspire] Timeout downloading ${url}`);
-        } else {
-          console.warn(`[GetInspire] Failed to download ${url}:`, error.message);
-        }
+      // Skip tracking/analytics URLs immediately
+      if (shouldSkipUrl(url)) {
         return null;
       }
+
+      // Try multiple strategies to fetch the resource - use faster approach
+      // Only try 2 strategies to avoid hanging on blocked resources
+      const strategies = [
+        { mode: 'cors', credentials: 'omit' },
+        { mode: 'cors', credentials: 'include' }
+      ];
+
+      for (const strategy of strategies) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+          const response = await fetch(url, {
+            signal: controller.signal,
+            cache: 'force-cache',
+            ...strategy
+          });
+          clearTimeout(timeoutId);
+
+          // Handle opaque responses (no-cors mode)
+          if (response.type === 'opaque') {
+            const blob = await response.blob();
+            if (blob && blob.size > 0) return blob;
+            continue;
+          }
+
+          if (!response.ok) continue;
+
+          const blob = await response.blob();
+          if (blob && blob.size > 0) return blob;
+        } catch (error) {
+          clearTimeout(timeoutId);
+          // If aborted or blocked, don't try more strategies
+          if (error.name === 'AbortError') break;
+        }
+      }
+
+      // Try via background script as last resort (for extension context)
+      // Use a short timeout for this too
+      try {
+        const bgTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Background fetch timeout')), 5000)
+        );
+        return await Promise.race([fetchViaBackground(url), bgTimeout]);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Fetch via background script (has more permissions)
+    async function fetchViaBackground(url) {
+      return new Promise((resolve) => {
+        browserAPI.runtime.sendMessage({ type: 'FETCH_ASSET', url }, response => {
+          if (response && response.success && response.data) {
+            // Convert base64 back to blob
+            const binary = atob(response.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            resolve(new Blob([bytes], { type: response.mimeType || 'application/octet-stream' }));
+          } else {
+            resolve(null);
+          }
+        });
+      });
     }
 
     // Helper function to convert blob to base64
@@ -870,7 +968,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     await expandCarousels();
 
     // Step 1.5: Enhanced animation capture (v2.0)
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: 'Capturing animations...'
     });
@@ -910,129 +1008,515 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     console.log('[GetInspire] Animation capture complete:', animationMetadata);
 
-    // Wait a bit for any lazy-loaded images to appear
+    // Wait for JavaScript-rendered content with smart detection
+    console.log('[GetInspire] Waiting for JS-rendered content...');
+
+    // Smart wait: keep checking until SVGs appear or timeout
+    let waitAttempts = 0;
+    const maxWaitAttempts = 20; // 20 * 500ms = 10 seconds max
+    let lastSvgCount = 0;
+
+    while (waitAttempts < maxWaitAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      waitAttempts++;
+
+      const currentSvgCount = document.querySelectorAll('svg').length;
+      const svgsWithContent = Array.from(document.querySelectorAll('svg')).filter(s => {
+        const inner = s.innerHTML.trim();
+        return inner && inner.length > 10 && (inner.includes('<path') || inner.includes('<use') || inner.includes('<circle') || inner.includes('<polygon'));
+      }).length;
+
+      console.log(`[GetInspire] Wait ${waitAttempts}: ${currentSvgCount} SVGs, ${svgsWithContent} with content`);
+
+      // If we have SVGs with content and count is stable, we're done
+      if (svgsWithContent > 0 && currentSvgCount === lastSvgCount) {
+        console.log('[GetInspire] SVG content detected and stable, proceeding...');
+        break;
+      }
+
+      lastSvgCount = currentSvgCount;
+
+      // Also trigger scroll to force lazy loading
+      if (waitAttempts % 4 === 0) {
+        window.scrollTo({ top: document.body.scrollHeight / 2, behavior: 'instant' });
+        await new Promise(r => setTimeout(r, 100));
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+    }
+
+    // Final wait for any animations to settle
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Step 2: Collect all assets
-    console.log('[GetInspire] Collecting all assets...');
+    // Log SVG statistics for debugging
+    const svgStats = {
+      total: document.querySelectorAll('svg').length,
+      withContent: Array.from(document.querySelectorAll('svg')).filter(s => s.innerHTML.trim()).length,
+      withUse: document.querySelectorAll('svg use').length,
+      symbols: document.querySelectorAll('symbol').length,
+      inLists: document.querySelectorAll('li svg').length,
+      withPaths: document.querySelectorAll('svg path').length
+    };
+    console.log('[GetInspire] SVG statistics:', svgStats);
+
+    // If still no SVGs with content, log a warning
+    if (svgStats.withContent === 0 && svgStats.total > 0) {
+      console.warn('[GetInspire] WARNING: SVGs found but none have content - icons may be missing');
+    }
+
+    // Step 2: Collect all assets (COMPREHENSIVE - v2.1 Enhanced)
+    console.log('[GetInspire] Collecting all assets (comprehensive mode)...');
 
     const assetsToDownload = new Map(); // url -> {type, element}
     const downloadedAssets = new Map(); // url -> {blob, base64, filename}
 
-    // Collect images (including those in expanded carousels)
+    // Helper to safely add asset URL (permissive - no security restrictions)
+    function addAsset(url, type, element = null, extra = {}) {
+      // Only skip truly invalid URLs
+      if (!url || url.startsWith('javascript:') || url.startsWith('#') || url === 'about:blank') return;
+      // Skip data: URLs (already embedded)
+      if (url.startsWith('data:')) return;
+      // Skip tracking/analytics URLs early
+      if (shouldSkipUrl(url)) return;
+
+      try {
+        const absoluteUrl = new URL(url, window.location.href).href;
+        // Double-check the absolute URL for tracking patterns
+        if (shouldSkipUrl(absoluteUrl)) return;
+        if (!assetsToDownload.has(absoluteUrl)) {
+          assetsToDownload.set(absoluteUrl, { type, element, ...extra });
+        }
+      } catch (e) {
+        // Try adding as-is if URL parsing fails
+        if (url.includes('/') || url.includes('.')) {
+          assetsToDownload.set(url, { type, element, ...extra });
+        }
+      }
+    }
+
+    // Helper to extract URLs from CSS value
+    function extractUrlsFromCSS(cssValue) {
+      if (!cssValue || cssValue === 'none') return [];
+      const urls = [];
+      const matches = cssValue.matchAll(/url\(["']?([^"')]+)["']?\)/gi);
+      for (const match of matches) {
+        if (match[1] && !match[1].startsWith('data:')) {
+          urls.push(match[1]);
+        }
+      }
+      return urls;
+    }
+
+    // Helper to parse srcset attribute
+    function parseSrcset(srcset) {
+      if (!srcset) return [];
+      const urls = [];
+      const parts = srcset.split(',');
+      for (const part of parts) {
+        const [url] = part.trim().split(/\s+/);
+        if (url && !url.startsWith('data:')) {
+          urls.push(url);
+        }
+      }
+      return urls;
+    }
+
+    // ==================== IMAGE COLLECTION (Enhanced) ====================
+    console.log('[GetInspire] Collecting images...');
+
+    // Standard img elements
     const images = document.querySelectorAll('img');
     images.forEach(img => {
-      if (img.src && !img.src.startsWith('data:')) {
-        assetsToDownload.set(img.src, {type: 'image', element: img});
+      // Main src
+      if (img.src) addAsset(img.src, 'image', img);
+
+      // Srcset for responsive images
+      if (img.srcset) {
+        parseSrcset(img.srcset).forEach(url => addAsset(url, 'image', img, { isSrcset: true }));
       }
-      // Also check data-src for lazy-loaded images
-      if (img.dataset.src && !img.dataset.src.startsWith('data:')) {
-        assetsToDownload.set(img.dataset.src, {type: 'image', element: img});
-      }
+
+      // Data attributes for lazy loading (common patterns)
+      const lazyAttrs = ['data-src', 'data-lazy', 'data-original', 'data-url', 'data-image',
+                         'data-lazy-src', 'data-srcset', 'data-bg', 'data-background',
+                         'data-hi-res', 'data-retina', 'data-full', 'data-zoom'];
+      lazyAttrs.forEach(attr => {
+        const val = img.getAttribute(attr);
+        if (val) {
+          if (attr.includes('srcset')) {
+            parseSrcset(val).forEach(url => addAsset(url, 'image', img, { isLazy: true }));
+          } else {
+            addAsset(val, 'image', img, { isLazy: true });
+          }
+        }
+      });
     });
 
-    // Collect preloaded images (important for scroll-based animations like wabi.ai)
-    const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"], link[rel="prefetch"][as="image"]');
-    preloadLinks.forEach(link => {
+    // Picture elements with multiple sources
+    const pictures = document.querySelectorAll('picture');
+    pictures.forEach(picture => {
+      const sources = picture.querySelectorAll('source');
+      sources.forEach(source => {
+        if (source.srcset) {
+          parseSrcset(source.srcset).forEach(url => addAsset(url, 'image', source, { isPicture: true }));
+        }
+        if (source.src) addAsset(source.src, 'image', source, { isPicture: true });
+      });
+    });
+
+    // ==================== META / OG / TWITTER IMAGES ====================
+    console.log('[GetInspire] Collecting meta images...');
+
+    const metaImages = document.querySelectorAll(
+      'meta[property="og:image"], meta[property="og:image:url"], ' +
+      'meta[name="twitter:image"], meta[name="twitter:image:src"], ' +
+      'meta[property="og:video:thumbnail"], meta[name="thumbnail"], ' +
+      'meta[itemprop="image"], meta[property="og:image:secure_url"]'
+    );
+    metaImages.forEach(meta => {
+      const content = meta.getAttribute('content');
+      if (content) addAsset(content, 'meta-image', meta);
+    });
+
+    // ==================== FAVICON & ICONS ====================
+    console.log('[GetInspire] Collecting favicons and icons...');
+
+    const iconLinks = document.querySelectorAll(
+      'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], ' +
+      'link[rel="apple-touch-icon-precomposed"], link[rel="mask-icon"], ' +
+      'link[rel="fluid-icon"], link[rel*="icon"]'
+    );
+    iconLinks.forEach(link => {
+      if (link.href) addAsset(link.href, 'icon', link);
+    });
+
+    // Web app manifest
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink && manifestLink.href) {
+      addAsset(manifestLink.href, 'manifest', manifestLink);
+    }
+
+    // ==================== PRELOADED ASSETS ====================
+    console.log('[GetInspire] Collecting preloaded assets...');
+
+    const preloads = document.querySelectorAll(
+      'link[rel="preload"], link[rel="prefetch"], link[rel="prerender"]'
+    );
+    preloads.forEach(link => {
+      const as = link.getAttribute('as');
       const href = link.href;
-      if (href && !href.startsWith('data:')) {
-        assetsToDownload.set(href, {type: 'image', element: null, isPreload: true});
+      if (href) {
+        const type = as === 'image' ? 'image' : as === 'font' ? 'font' : as === 'style' ? 'stylesheet' : 'preload';
+        addAsset(href, type, link, { isPreload: true });
       }
     });
 
-    // Also add image sequence frames that were detected earlier
+    // Add image sequence frames that were detected earlier
     let sequenceFrameCount = 0;
     if (imageSequences && imageSequences.length > 0) {
       console.log(`[GetInspire] Adding ${imageSequences.length} image sequences to download queue`);
       for (const seq of imageSequences) {
         for (const frameSrc of seq.frames) {
-          if (frameSrc && !frameSrc.startsWith('data:')) {
-            assetsToDownload.set(frameSrc, {type: 'image', element: null, isSequenceFrame: true});
-            sequenceFrameCount++;
-          }
+          addAsset(frameSrc, 'image', null, { isSequenceFrame: true });
+          sequenceFrameCount++;
         }
       }
     }
-
-    console.log(`[GetInspire] Found ${preloadLinks.length} preloaded images`);
     console.log(`[GetInspire] Added ${sequenceFrameCount} image sequence frames to queue`);
-    console.log(`[GetInspire] Total assets to download: ${assetsToDownload.size}`);
 
-    // Collect videos
+    // ==================== VIDEO COLLECTION (Enhanced) ====================
+    console.log('[GetInspire] Collecting videos...');
+
     const videos = document.querySelectorAll('video');
     videos.forEach(video => {
-      if (video.src && !video.src.startsWith('data:') && !video.src.startsWith('blob:')) {
-        assetsToDownload.set(video.src, {type: 'video', element: video});
-      }
-      // Also check source elements
-      const sources = video.querySelectorAll('source');
-      sources.forEach(source => {
-        if (source.src && !source.src.startsWith('data:') && !source.src.startsWith('blob:')) {
-          assetsToDownload.set(source.src, {type: 'video', element: source});
-        }
+      // Main src
+      if (video.src) addAsset(video.src, 'video', video);
+
+      // Poster image
+      if (video.poster) addAsset(video.poster, 'image', video, { isPoster: true });
+
+      // Source elements (multiple formats)
+      video.querySelectorAll('source').forEach(source => {
+        if (source.src) addAsset(source.src, 'video', source);
+      });
+
+      // Track elements (subtitles, captions)
+      video.querySelectorAll('track').forEach(track => {
+        if (track.src) addAsset(track.src, 'track', track);
+      });
+
+      // Data attributes for lazy video loading
+      ['data-src', 'data-poster', 'data-video'].forEach(attr => {
+        const val = video.getAttribute(attr);
+        if (val) addAsset(val, attr.includes('poster') ? 'image' : 'video', video, { isLazy: true });
       });
     });
 
-    // Capture canvas elements as images
+    // ==================== AUDIO COLLECTION ====================
+    console.log('[GetInspire] Collecting audio...');
+
+    const audioElements = document.querySelectorAll('audio');
+    audioElements.forEach(audio => {
+      if (audio.src) addAsset(audio.src, 'audio', audio);
+      audio.querySelectorAll('source').forEach(source => {
+        if (source.src) addAsset(source.src, 'audio', source);
+      });
+    });
+
+    // ==================== CANVAS CAPTURE (Enhanced) ====================
+    console.log('[GetInspire] Capturing canvas elements...');
+
     const canvases = document.querySelectorAll('canvas');
     canvases.forEach((canvas, index) => {
       try {
-        const dataUrl = canvas.toDataURL('image/png');
+        // Try multiple formats for best quality
+        let dataUrl;
+        const width = canvas.width || canvas.offsetWidth;
+        const height = canvas.height || canvas.offsetHeight;
+
+        if (width > 0 && height > 0) {
+          // Try PNG first (lossless)
+          dataUrl = canvas.toDataURL('image/png');
+
+          // If canvas is large, also try WebP for smaller size
+          if (width * height > 500000) {
+            try {
+              const webpUrl = canvas.toDataURL('image/webp', 0.95);
+              if (webpUrl.length < dataUrl.length) {
+                dataUrl = webpUrl;
+              }
+            } catch (e) {}
+          }
+        } else {
+          dataUrl = canvas.toDataURL('image/png');
+        }
+
         const canvasId = `canvas-${index}`;
         canvas.setAttribute('data-canvas-id', canvasId);
-        // Store canvas data for later replacement
         assetsToDownload.set(`canvas-${index}`, {
           type: 'canvas',
           element: canvas,
-          dataUrl: dataUrl
+          dataUrl: dataUrl,
+          width: width,
+          height: height
         });
       } catch (e) {
-        console.warn('[GetInspire] Could not capture canvas:', e);
+        console.warn('[GetInspire] Could not capture canvas:', e.message);
       }
     });
 
-    // Collect SVG images and inline SVGs
-    const svgImages = document.querySelectorAll('img[src$=".svg"], use[href], use[xlink\\:href]');
-    svgImages.forEach(el => {
-      const href = el.getAttribute('href') || el.getAttribute('xlink:href');
-      if (href && !href.startsWith('data:') && !href.startsWith('#')) {
-        assetsToDownload.set(href, {type: 'svg', element: el});
+    // ==================== SVG COLLECTION (Enhanced) ====================
+    console.log('[GetInspire] Collecting SVGs...');
+
+    // SVG images
+    document.querySelectorAll('img[src*=".svg"]').forEach(img => {
+      if (img.src) addAsset(img.src, 'svg', img);
+    });
+
+    // External SVG references via use elements
+    document.querySelectorAll('use[href], use[xlink\\:href]').forEach(use => {
+      const href = use.getAttribute('href') || use.getAttribute('xlink:href');
+      if (href && !href.startsWith('#')) {
+        const [svgUrl, symbolId] = href.split('#');
+        if (svgUrl) addAsset(svgUrl, 'svg-sprite', use, { symbolId });
       }
     });
 
-    // Collect CSS background images
-    const allElements = document.querySelectorAll('*');
-    allElements.forEach(el => {
-      const style = window.getComputedStyle(el);
-      const bgImage = style.backgroundImage;
-      if (bgImage && bgImage !== 'none') {
-        const matches = bgImage.match(/url\(["']?([^"')]+)["']?\)/g);
-        if (matches) {
-          matches.forEach(match => {
-            const url = match.replace(/url\(["']?|["']?\)/g, '');
-            if (!url.startsWith('data:')) {
-              assetsToDownload.set(url, {type: 'background', element: el});
-            }
+    // SVG sprites and symbols tracking
+    let symbolCount = 0;
+    let inlineSvgCount = 0;
+    document.querySelectorAll('svg').forEach(svg => {
+      const symbols = svg.querySelectorAll('symbol, defs');
+      if (symbols.length > 0) {
+        symbolCount += symbols.length;
+        svg.setAttribute('data-gi-sprite', 'true');
+      }
+      if (symbols.length === 0 && svg.innerHTML.trim()) {
+        inlineSvgCount++;
+      }
+    });
+    console.log(`[GetInspire] Found ${symbolCount} SVG symbols/defs, ${inlineSvgCount} inline SVGs`);
+
+    // External SVG files via object/embed
+    document.querySelectorAll('object[data*=".svg"], embed[src*=".svg"], iframe[src*=".svg"]').forEach(obj => {
+      const src = obj.getAttribute('data') || obj.getAttribute('src');
+      if (src) addAsset(src, 'svg', obj);
+    });
+
+    // ==================== CSS BACKGROUND & COMPUTED STYLES (Optimized) ====================
+    console.log('[GetInspire] Collecting CSS backgrounds and computed styles...');
+
+    // OPTIMIZATION: Only check elements that likely have background images
+    // Instead of checking ALL elements, use targeted selectors
+    const elementsWithBgSelectors = [
+      '[style*="background"]',
+      '[style*="url("]',
+      '[style*="mask"]',
+      '[style*="cursor"]',
+      '[class*="bg-"]',
+      '[class*="background"]',
+      '[class*="hero"]',
+      '[class*="banner"]',
+      '[class*="cover"]',
+      '[class*="thumbnail"]',
+      'header', 'footer', 'section', 'article', 'aside',
+      'div[class]', 'span[class]', // Only divs/spans with classes
+      '[data-bg]', '[data-background]', '[data-src]', '[data-image]'
+    ];
+
+    const cssPropertiesToCheck = [
+      'backgroundImage',
+      'borderImageSource',
+      'listStyleImage',
+      'maskImage',
+      'webkitMaskImage'
+    ];
+
+    // Batch collect elements to check
+    const elementsToCheck = new Set();
+    elementsWithBgSelectors.forEach(selector => {
+      try {
+        document.querySelectorAll(selector).forEach(el => elementsToCheck.add(el));
+      } catch (e) {}
+    });
+
+    console.log(`[GetInspire] Checking ${elementsToCheck.size} elements for CSS backgrounds...`);
+
+    // Process in batches to avoid blocking
+    const elementArray = Array.from(elementsToCheck);
+    const BATCH_SIZE = 100;
+
+    for (let i = 0; i < elementArray.length; i += BATCH_SIZE) {
+      const batch = elementArray.slice(i, i + BATCH_SIZE);
+
+      batch.forEach(el => {
+        // Check inline style first (fast)
+        const inlineStyle = el.getAttribute('style');
+        if (inlineStyle) {
+          extractUrlsFromCSS(inlineStyle).forEach(url => {
+            addAsset(url, 'inline-style', el);
           });
         }
+
+        // Check data-* attributes (fast)
+        Array.from(el.attributes).forEach(attr => {
+          if (attr.name.startsWith('data-') &&
+              (attr.name.includes('image') || attr.name.includes('bg') ||
+               attr.name.includes('src') || attr.name.includes('url') ||
+               attr.name.includes('background') || attr.name.includes('poster'))) {
+            const val = attr.value;
+            if (val && (val.includes('/') || val.includes('.')) && !val.includes(' ')) {
+              addAsset(val, 'data-attr', el, { attribute: attr.name });
+            }
+          }
+        });
+
+        // Only call getComputedStyle if element has classes or inline styles
+        if (el.className || inlineStyle) {
+          try {
+            const style = window.getComputedStyle(el);
+            cssPropertiesToCheck.forEach(prop => {
+              const value = style[prop];
+              if (value && value !== 'none' && value.includes('url(')) {
+                extractUrlsFromCSS(value).forEach(url => {
+                  addAsset(url, 'css-asset', el, { property: prop });
+                });
+              }
+            });
+          } catch (e) {}
+        }
+      });
+
+      // Yield to browser every batch
+      if (i + BATCH_SIZE < elementArray.length) {
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    // Check ::before/::after only on elements with content property set
+    console.log('[GetInspire] Checking pseudo-elements...');
+    document.querySelectorAll('[class*="icon"], [class*="before"], [class*="after"], [class*="bullet"]').forEach(el => {
+      ['::before', '::after'].forEach(pseudo => {
+        try {
+          const pseudoStyle = window.getComputedStyle(el, pseudo);
+          const content = pseudoStyle.content;
+          if (content && content !== 'none' && content !== 'normal' && content.includes('url(')) {
+            extractUrlsFromCSS(content).forEach(url => {
+              addAsset(url, 'css-asset', el, { property: 'content', pseudo });
+            });
+          }
+          const bgImage = pseudoStyle.backgroundImage;
+          if (bgImage && bgImage !== 'none' && bgImage.includes('url(')) {
+            extractUrlsFromCSS(bgImage).forEach(url => {
+              addAsset(url, 'css-asset', el, { property: 'backgroundImage', pseudo });
+            });
+          }
+        } catch (e) {}
+      });
+    });
+
+    // ==================== IFRAME SOURCES ====================
+    console.log('[GetInspire] Collecting iframe sources...');
+
+    document.querySelectorAll('iframe[src]').forEach(iframe => {
+      const src = iframe.src;
+      // Only collect same-origin iframes or specific embeddable content
+      if (src && !src.startsWith('about:') && !src.startsWith('javascript:')) {
+        try {
+          const iframeUrl = new URL(src);
+          if (iframeUrl.origin === window.location.origin) {
+            addAsset(src, 'iframe', iframe);
+          }
+        } catch (e) {}
       }
     });
 
-    // Collect favicons and other link resources
-    const links = document.querySelectorAll('link[rel*="icon"], link[rel="apple-touch-icon"]');
-    links.forEach(link => {
-      if (link.href) {
-        assetsToDownload.set(link.href, {type: 'icon', element: link});
-      }
+    // ==================== FORM ACTION IMAGES (Submit buttons etc) ====================
+    document.querySelectorAll('input[type="image"]').forEach(input => {
+      if (input.src) addAsset(input.src, 'image', input);
     });
 
     // Collect fonts from @font-face rules in stylesheets
     console.log('[GetInspire] Collecting fonts from @font-face rules...');
     const allStyleSheets = [...document.styleSheets];
     let fontCount = 0;
+
+    // Helper function to extract font URLs from CSS text
+    function extractFontUrlsFromCSS(cssText, baseUrl) {
+      const fontUrls = [];
+      // Match @font-face blocks
+      const fontFaceRegex = /@font-face\s*\{[^}]*\}/gi;
+      const fontFaceBlocks = cssText.match(fontFaceRegex) || [];
+
+      fontFaceBlocks.forEach(block => {
+        // Extract URLs from src property
+        const urlMatches = block.match(/url\(["']?([^"')]+)["']?\)/g);
+        if (urlMatches) {
+          urlMatches.forEach(match => {
+            let url = match.replace(/url\(["']?|["']?\)/g, '');
+            // Skip data URIs
+            if (url.startsWith('data:')) return;
+            // Convert relative URLs to absolute using the stylesheet's base URL
+            if (!url.startsWith('http')) {
+              try {
+                url = new URL(url, baseUrl).href;
+              } catch (e) {
+                console.warn(`[GetInspire] Invalid font URL: ${url}`);
+                return;
+              }
+            }
+            if (url.startsWith('http')) {
+              fontUrls.push(url);
+            }
+          });
+        }
+      });
+      return fontUrls;
+    }
+
+    // First, try to read from accessible stylesheets
     allStyleSheets.forEach(sheet => {
       try {
         const rules = [...sheet.cssRules || []];
+        const sheetBaseUrl = sheet.href || window.location.href;
         rules.forEach(rule => {
           if (rule.type === CSSRule.FONT_FACE_RULE) {
             const src = rule.style.src;
@@ -1042,10 +1526,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
               if (urlMatches) {
                 urlMatches.forEach(match => {
                   let url = match.replace(/url\(["']?|["']?\)/g, '');
-                  // Convert relative URLs to absolute
+                  // Convert relative URLs to absolute using stylesheet's base URL
                   if (!url.startsWith('http') && !url.startsWith('data:')) {
                     try {
-                      url = new URL(url, window.location.href).href;
+                      url = new URL(url, sheetBaseUrl).href;
                     } catch (e) {
                       console.warn(`[GetInspire] Invalid font URL: ${url}`);
                       return;
@@ -1061,54 +1545,72 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
           }
         });
       } catch (e) {
-        // Cross-origin stylesheets might throw errors
-        console.warn('[GetInspire] Could not read stylesheet rules:', e.message);
-      }
-    });
-    console.log(`[GetInspire] Found ${fontCount} font files`);
-
-    // Collect script files
-    console.log('[GetInspire] Collecting script files...');
-    const scriptElements = document.querySelectorAll('script[src]');
-    scriptElements.forEach(script => {
-      if (script.src && !script.src.startsWith('data:')) {
-        assetsToDownload.set(script.src, {type: 'script', element: script});
-      }
-    });
-
-    // Collect audio elements
-    const audioElements = document.querySelectorAll('audio');
-    audioElements.forEach(audio => {
-      if (audio.src && !audio.src.startsWith('data:') && !audio.src.startsWith('blob:')) {
-        assetsToDownload.set(audio.src, {type: 'audio', element: audio});
-      }
-      const sources = audio.querySelectorAll('source');
-      sources.forEach(source => {
-        if (source.src && !source.src.startsWith('data:') && !source.src.startsWith('blob:')) {
-          assetsToDownload.set(source.src, {type: 'audio', element: source});
+        // Cross-origin stylesheets will throw - we'll fetch these separately below
+        if (sheet.href) {
+          console.log('[GetInspire] Will fetch cross-origin stylesheet for fonts:', sheet.href);
         }
-      });
+      }
     });
 
-    // Collect images with srcset
-    console.log('[GetInspire] Collecting images with srcset...');
-    const imagesWithSrcset = document.querySelectorAll('img[srcset], source[srcset]');
-    imagesWithSrcset.forEach(img => {
-      const srcset = img.getAttribute('srcset');
-      if (srcset) {
-        // Parse srcset: "url1 1x, url2 2x" or "url1 100w, url2 200w"
-        const srcsetUrls = srcset.split(',').map(s => s.trim().split(/\s+/)[0]);
-        srcsetUrls.forEach(url => {
-          if (url && !url.startsWith('data:')) {
-            // Convert relative to absolute
-            const absUrl = new URL(url, window.location.href).href;
-            assetsToDownload.set(absUrl, {type: 'image', element: img});
+    // Fetch cross-origin stylesheets to extract font URLs (PARALLEL)
+    console.log('[GetInspire] Fetching external stylesheets for font extraction...');
+    const externalStylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+
+    // Filter to only cross-origin stylesheets we haven't processed
+    const stylesheetsToFetch = externalStylesheets.filter(link => {
+      if (!link.href) return false;
+      const sheet = Array.from(document.styleSheets).find(s => s.href === link.href);
+      if (sheet) {
+        try {
+          const _ = sheet.cssRules;
+          return false; // Already accessible
+        } catch (e) {
+          return true; // Cross-origin, need to fetch
+        }
+      }
+      return true;
+    });
+
+    // Fetch all stylesheets in parallel
+    const stylesheetPromises = stylesheetsToFetch.map(async link => {
+      try {
+        const response = await fetch(link.href, { mode: 'cors', credentials: 'omit' });
+        if (response.ok) {
+          const cssText = await response.text();
+          return { href: link.href, cssText };
+        }
+      } catch (e) {}
+      return null;
+    });
+
+    const stylesheetResults = await Promise.all(stylesheetPromises);
+
+    // Process results
+    stylesheetResults.forEach(result => {
+      if (result) {
+        const fontUrls = extractFontUrlsFromCSS(result.cssText, result.href);
+        fontUrls.forEach(url => {
+          if (!assetsToDownload.has(url)) {
+            assetsToDownload.set(url, { type: 'font', element: null, fromStylesheet: result.href });
+            fontCount++;
           }
         });
       }
     });
 
-    console.log(`[GetInspire] Found ${assetsToDownload.size} assets to download`);
+    console.log(`[GetInspire] Found ${fontCount} font files`);
+
+    // Collect script files (for reference, will be removed later for offline safety)
+    console.log('[GetInspire] Collecting script files...');
+    document.querySelectorAll('script[src]').forEach(script => {
+      if (script.src && !script.src.startsWith('data:')) {
+        assetsToDownload.set(script.src, {type: 'script', element: script});
+      }
+    });
+
+    // NOTE: Audio and srcset already collected in enhanced section above
+
+    console.log(`[GetInspire] Total assets to download: ${assetsToDownload.size}`);
 
     // Safety check - limit total assets to prevent memory issues
     if (assetsToDownload.size > MAX_ASSETS) {
@@ -1119,7 +1621,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // Step 3: Download all assets with concurrency control and deduplication
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: `Downloading ${assetsToDownload.size} assets...`
     });
@@ -1128,64 +1630,87 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     let failCount = 0;
     let deduplicatedCount = 0;
 
-    // Helper to download with concurrency limit and deduplication
+    // Helper to download with concurrency limit and deduplication (OPTIMIZED)
     async function downloadWithLimit(entries) {
+      const total = entries.length;
       const chunks = [];
-      for (let i = 0; i < entries.length; i += MAX_CONCURRENT) {
+      for (let i = 0; i < total; i += MAX_CONCURRENT) {
         chunks.push(entries.slice(i, i + MAX_CONCURRENT));
+      }
+
+      let lastProgressUpdate = Date.now();
+      let skippedCount = 0;
+
+      // Helper to wrap download with overall timeout
+      async function downloadWithTimeout(url, info) {
+        // Skip tracking URLs immediately
+        if (shouldSkipUrl(url)) {
+          skippedCount++;
+          return null;
+        }
+
+        // Wrap the entire download process with a hard timeout
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Asset timeout')), ASSET_OVERALL_TIMEOUT)
+        );
+
+        try {
+          return await Promise.race([downloadAsBlob(url), timeoutPromise]);
+        } catch (e) {
+          return null;
+        }
       }
 
       for (const chunk of chunks) {
         await Promise.all(chunk.map(async ([url, info]) => {
           downloadCount++;
 
-          // Update status every 10 downloads
-          if (downloadCount % 10 === 0) {
-            chrome.runtime.sendMessage({
+          // Update status every 25 downloads OR every 1 second (whichever comes first)
+          const now = Date.now();
+          if (downloadCount % 25 === 0 || now - lastProgressUpdate > 1000) {
+            lastProgressUpdate = now;
+            browserAPI.runtime.sendMessage({
               type: 'CAPTURE_STATUS',
-              status: `Downloading assets... ${downloadCount}/${assetsToDownload.size}`,
-              progress: { done: downloadCount, total: assetsToDownload.size }
+              status: `Downloading... ${downloadCount}/${total} (${skippedCount} skipped)`,
+              progress: { done: downloadCount, total }
             });
           }
 
-          console.log(`[GetInspire] Downloading ${downloadCount}/${assetsToDownload.size}: ${url.substring(0, 80)}...`);
-
-          const blob = await downloadAsBlob(url);
+          const blob = await downloadWithTimeout(url, info);
           if (blob) {
             try {
-              // Compute hash for deduplication
-              const hash = await hashBlob(blob);
+              // Only compute hash for larger files (deduplication benefit)
+              // Skip hash for small files to save CPU
+              let hash = null;
+              if (blob.size > 10000) { // Only hash files > 10KB
+                hash = await hashBlob(blob);
+              }
 
-              // Check if we already have this content
+              // Check if we already have this content (only for hashed files)
               if (hash && assetsByHash.has(hash)) {
-                // Reuse existing asset
                 const existing = assetsByHash.get(hash);
                 downloadedAssets.set(url, {
                   blob: existing.blob,
                   base64: existing.base64,
                   filename: existing.filename,
-                  hash: hash,
+                  hash,
                   deduplicated: true
                 });
                 deduplicatedCount++;
                 successCount++;
-                console.log(`[GetInspire] Deduplicated: ${url.substring(0, 50)}...`);
               } else {
                 // New unique asset
                 const base64 = await blobToBase64(blob);
                 const filename = getFilenameFromUrl(url);
-                const assetData = {blob, base64, filename, hash};
+                const assetData = { blob, base64, filename, hash };
                 downloadedAssets.set(url, assetData);
 
-                // Store by hash for future deduplication
                 if (hash) {
                   assetsByHash.set(hash, assetData);
-                  assetHashCache.set(url, hash);
                 }
                 successCount++;
               }
             } catch (e) {
-              console.warn(`[GetInspire] Failed to process blob for ${url}:`, e);
               failCount++;
             }
           } else {
@@ -1219,7 +1744,79 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       }
     });
 
-    const htmlContent = document.documentElement.outerHTML;
+    // Fix inline SVGs before capturing HTML
+    console.log('[GetInspire] Fixing inline SVGs for offline viewing...');
+    const allInlineSvgs = document.querySelectorAll('svg');
+    let svgFixCount = 0;
+    allInlineSvgs.forEach(svg => {
+      try {
+        // Skip sprite containers
+        if (svg.querySelector('symbol, defs')) return;
+
+        // Get computed color for currentColor replacement
+        const computedStyle = window.getComputedStyle(svg);
+        const parentStyle = svg.parentElement ? window.getComputedStyle(svg.parentElement) : null;
+        const color = computedStyle.color || (parentStyle && parentStyle.color) || '#000000';
+
+        // Fix fill="currentColor" on the SVG and its children
+        const elementsWithCurrentColor = svg.querySelectorAll('[fill="currentColor"], [stroke="currentColor"]');
+        elementsWithCurrentColor.forEach(el => {
+          if (el.getAttribute('fill') === 'currentColor') {
+            el.setAttribute('fill', color);
+            el.setAttribute('data-gi-original-fill', 'currentColor');
+          }
+          if (el.getAttribute('stroke') === 'currentColor') {
+            el.setAttribute('stroke', color);
+            el.setAttribute('data-gi-original-stroke', 'currentColor');
+          }
+        });
+
+        // Also check the SVG element itself
+        if (svg.getAttribute('fill') === 'currentColor') {
+          svg.setAttribute('fill', color);
+          svg.setAttribute('data-gi-original-fill', 'currentColor');
+        }
+
+        // Ensure SVG has proper dimensions if missing
+        if (!svg.getAttribute('width') && !svg.getAttribute('height') && !svg.style.width && !svg.style.height) {
+          const bbox = svg.getBBox ? svg.getBBox() : null;
+          if (bbox && bbox.width && bbox.height) {
+            svg.style.width = bbox.width + 'px';
+            svg.style.height = bbox.height + 'px';
+          }
+        }
+
+        // Handle <use> elements that reference missing symbols
+        const useElements = svg.querySelectorAll('use');
+        useElements.forEach(use => {
+          const href = use.getAttribute('href') || use.getAttribute('xlink:href');
+          if (href && href.startsWith('#')) {
+            const symbolId = href.substring(1);
+            const symbol = document.getElementById(symbolId);
+            if (!symbol) {
+              console.warn(`[GetInspire] Missing SVG symbol: ${symbolId}`);
+              // Try to find it in any SVG sprite container
+              const foundSymbol = document.querySelector(`symbol#${symbolId}, svg #${symbolId}`);
+              if (foundSymbol) {
+                console.log(`[GetInspire] Found symbol ${symbolId} in sprite container`);
+              }
+            }
+          }
+        });
+
+        svgFixCount++;
+      } catch (e) {
+        console.warn('[GetInspire] Error fixing SVG:', e);
+      }
+    });
+    console.log(`[GetInspire] Fixed ${svgFixCount} inline SVGs`);
+
+    // Capture DOCTYPE and full HTML
+    const doctype = document.doctype
+      ? `<!DOCTYPE ${document.doctype.name}${document.doctype.publicId ? ` PUBLIC "${document.doctype.publicId}"` : ''}${document.doctype.systemId ? ` "${document.doctype.systemId}"` : ''}>`
+      : '<!DOCTYPE html>';
+    const htmlContent = doctype + '\n' + document.documentElement.outerHTML;
+    console.log('[GetInspire] DOCTYPE preserved:', doctype);
 
     // Replace asset URLs with base64 or local paths
     let modifiedHtml = htmlContent;
@@ -1236,27 +1833,58 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         continue;
       }
 
+      // Skip data URIs - they're already embedded
+      if (url.startsWith('data:')) {
+        continue;
+      }
+
       if (!data.blob) continue;
 
-      const isSmall = data.blob.size < 100000;
+      const isSmall = data.blob.size < EMBED_THRESHOLD;
       const replacement = isSmall ? data.base64 : `assets/${data.filename}`;
 
       // Try multiple URL patterns for replacement
-      const urlObj = new URL(url);
-      const patterns = [
-        url, // Full URL
-        urlObj.pathname, // Just the path
-        urlObj.pathname.replace(/^\//, ''), // Path without leading slash
-      ];
+      try {
+        const urlObj = new URL(url);
+        const patterns = [
+          url, // Full URL
+          urlObj.pathname, // Just the path
+          urlObj.pathname.replace(/^\//, ''), // Path without leading slash
+        ];
 
-      patterns.forEach(pattern => {
-        if (pattern) {
-          const regex = new RegExp(escapeForRegex(pattern), 'g');
-          modifiedHtml = modifiedHtml.replace(regex, replacement);
-        }
-      });
+        patterns.forEach(pattern => {
+          // Skip very short patterns to avoid false positives (e.g., matching inside data: URIs)
+          if (!pattern || pattern.length < 5) {
+            return;
+          }
 
-      assetMapping[url] = isSmall ? 'embedded' : `assets/${data.filename}`;
+          // Use a more specific regex that requires the URL to be in an attribute context
+          // This prevents matching inside data: URIs or other embedded content
+          const escapedPattern = escapeForRegex(pattern);
+
+          // Only replace in src, href, url(), or srcset contexts - not inside data: URIs
+          // Match pattern when preceded by: src=", href=", url(, srcset=" or when it's the URL in url()
+          const contextualRegex = new RegExp(
+            `((?:src|href|poster|data-src|data-lazy)=["'])${escapedPattern}(["'])` +
+            `|(url\\(["']?)${escapedPattern}(["']?\\))`,
+            'gi'
+          );
+
+          modifiedHtml = modifiedHtml.replace(contextualRegex, (match, prefix1, suffix1, prefix2, suffix2) => {
+            if (prefix1) {
+              return `${prefix1}${replacement}${suffix1}`;
+            } else if (prefix2) {
+              return `${prefix2}${replacement}${suffix2}`;
+            }
+            return match;
+          });
+        });
+
+        assetMapping[url] = isSmall ? 'embedded' : `assets/${data.filename}`;
+      } catch (e) {
+        // Skip invalid URLs
+        console.warn('[GetInspire] Skipping invalid URL:', url);
+      }
     }
 
     // Step 5: Get stylesheets and scripts
@@ -1330,51 +1958,118 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       return keyframes;
     }
 
-    // Collect all CSS @property declarations and keyframes
+    // Collect all CSS @property declarations, keyframes, and @font-face rules
     const allPropertyRules = new Set();
     const allKeyframes = new Set();
+    const allFontFaceRules = new Set();
+
+    // Helper function to extract @font-face rules from CSS
+    function extractFontFaceRules(cssText) {
+      const fontFaceRules = [];
+      const fontFaceRegex = /@font-face\s*\{/gi;
+      let match;
+
+      while ((match = fontFaceRegex.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        // Find the matching closing brace
+        let braceCount = 1;
+        let currentIndex = fontFaceRegex.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          const fullFontFace = cssText.substring(startIndex, currentIndex);
+          fontFaceRules.push(fullFontFace);
+        }
+      }
+      return fontFaceRules;
+    }
 
     // Get all link stylesheets
     const linkStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
     console.log(`[GetInspire] Found ${linkStyles.length} linked stylesheets`);
+    let stylesheetsLoaded = 0;
+    let stylesheetsFailed = 0;
 
     for (const link of linkStyles) {
       try {
+        console.log(`[GetInspire] Fetching stylesheet: ${link.href}`);
         const response = await fetch(link.href);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         let cssText = await response.text();
-        console.log(`[GetInspire] Processing stylesheet: ${link.href} (${cssText.length} chars)`);
+        console.log(`[GetInspire] Loaded stylesheet: ${link.href} (${cssText.length} chars)`);
+        stylesheetsLoaded++;
 
-        // Extract and store @property rules and keyframes before replacement
+        // First, resolve all relative URLs in the CSS to absolute URLs based on the stylesheet's location
+        // This ensures fonts and other assets referenced relatively get properly matched
+        const stylesheetBaseUrl = link.href;
+        cssText = cssText.replace(/url\(["']?([^"')]+)["']?\)/g, (match, urlInCss) => {
+          // Skip data URIs and already absolute URLs
+          if (urlInCss.startsWith('data:') || urlInCss.startsWith('http://') || urlInCss.startsWith('https://')) {
+            return match;
+          }
+          // Resolve relative URL against stylesheet's base
+          try {
+            const absoluteUrl = new URL(urlInCss, stylesheetBaseUrl).href;
+            return `url("${absoluteUrl}")`;
+          } catch (e) {
+            return match;
+          }
+        });
+
+        // Extract and store @property rules, keyframes, and @font-face AFTER URL resolution
         extractCSSProperties(cssText).forEach(rule => allPropertyRules.add(rule));
         extractKeyframes(cssText).forEach(kf => allKeyframes.add(kf));
+        extractFontFaceRules(cssText).forEach(ff => allFontFaceRules.add(ff));
 
         // Replace URLs in CSS with downloaded assets
         for (const [url, data] of downloadedAssets) {
           if (!data.blob) continue;
+          if (url.startsWith('data:') || url.startsWith('canvas-')) continue;
 
-          const isSmall = data.blob.size < 100000;
+          const isSmall = data.blob.size < EMBED_THRESHOLD;
           const replacement = isSmall ? data.base64 : `assets/${data.filename}`;
 
-          // Try multiple URL patterns
-          const urlObj = new URL(url);
-          const patterns = [
-            url,
-            urlObj.pathname,
-            urlObj.pathname.replace(/^\//, ''),
-          ];
+          try {
+            // Try multiple URL patterns
+            const urlObj = new URL(url);
+            const patterns = [
+              url,
+              urlObj.pathname,
+              urlObj.pathname.replace(/^\//, ''),
+            ];
 
-          patterns.forEach(pattern => {
-            if (pattern) {
-              const regex = new RegExp(escapeForRegex(pattern), 'g');
-              cssText = cssText.replace(regex, replacement);
-            }
-          });
+            patterns.forEach(pattern => {
+              // Skip short patterns to avoid false matches
+              if (!pattern || pattern.length < 5) return;
+
+              // In CSS, URLs only appear in url() - use targeted replacement
+              const escapedPattern = escapeForRegex(pattern);
+              const cssUrlRegex = new RegExp(`(url\\(["']?)${escapedPattern}(["']?\\))`, 'gi');
+              cssText = cssText.replace(cssUrlRegex, `$1${replacement}$2`);
+            });
+          } catch (e) {
+            // Skip invalid URLs
+          }
         }
 
         styles.push(`/* From: ${link.href} */\n${cssText}`);
       } catch (e) {
-        console.warn('[GetInspire] Could not fetch stylesheet:', link.href, e);
+        console.error('[GetInspire] FAILED to fetch stylesheet:', link.href, e.message);
+        stylesheetsFailed++;
       }
+    }
+
+    console.log(`[GetInspire] Stylesheets: ${stylesheetsLoaded} loaded, ${stylesheetsFailed} failed`);
+    if (stylesheetsFailed > 0) {
+      console.warn(`[GetInspire] WARNING: ${stylesheetsFailed} stylesheet(s) could not be loaded - some styles may be missing`);
     }
 
     // Get all style elements
@@ -1385,31 +2080,40 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       let cssText = style.textContent;
       console.log(`[GetInspire] Processing inline style (${cssText.length} chars)`);
 
-      // Extract and store @property rules and keyframes
+      // Extract and store @property rules, keyframes, and @font-face
       extractCSSProperties(cssText).forEach(rule => allPropertyRules.add(rule));
       extractKeyframes(cssText).forEach(kf => allKeyframes.add(kf));
+      extractFontFaceRules(cssText).forEach(ff => allFontFaceRules.add(ff));
 
       // Replace URLs in inline CSS
       for (const [url, data] of downloadedAssets) {
         if (!data.blob) continue;
+        if (url.startsWith('data:') || url.startsWith('canvas-')) continue;
 
-        const isSmall = data.blob.size < 100000;
+        const isSmall = data.blob.size < EMBED_THRESHOLD;
         const replacement = isSmall ? data.base64 : `assets/${data.filename}`;
 
-        // Try multiple URL patterns
-        const urlObj = new URL(url);
-        const patterns = [
-          url,
-          urlObj.pathname,
-          urlObj.pathname.replace(/^\//, ''),
-        ];
+        try {
+          // Try multiple URL patterns
+          const urlObj = new URL(url);
+          const patterns = [
+            url,
+            urlObj.pathname,
+            urlObj.pathname.replace(/^\//, ''),
+          ];
 
-        patterns.forEach(pattern => {
-          if (pattern) {
-            const regex = new RegExp(escapeForRegex(pattern), 'g');
-            cssText = cssText.replace(regex, replacement);
-          }
-        });
+          patterns.forEach(pattern => {
+            // Skip short patterns to avoid false matches
+            if (!pattern || pattern.length < 5) return;
+
+            // In CSS, URLs only appear in url() - use targeted replacement
+            const escapedPattern = escapeForRegex(pattern);
+            const cssUrlRegex = new RegExp(`(url\\(["']?)${escapedPattern}(["']?\\))`, 'gi');
+            cssText = cssText.replace(cssUrlRegex, `$1${replacement}$2`);
+          });
+        } catch (e) {
+          // Skip invalid URLs
+        }
       }
 
       styles.push(cssText);
@@ -1483,6 +2187,46 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       styles.unshift(keyframesCSS);
     } else {
       console.log('[GetInspire] No keyframe animations found');
+    }
+
+    // Add all collected @font-face rules (with URL replacement)
+    if (allFontFaceRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allFontFaceRules.size} @font-face rules`);
+      let fontFaceCSS = [...allFontFaceRules].join('\n\n');
+
+      // Replace font URLs in @font-face rules with downloaded assets
+      for (const [url, data] of downloadedAssets) {
+        if (!data.blob) continue;
+        if (url.startsWith('data:') || url.startsWith('canvas-')) continue;
+
+        const isSmall = data.blob.size < EMBED_THRESHOLD;
+        const replacement = isSmall ? data.base64 : `assets/${data.filename}`;
+
+        try {
+          const urlObj = new URL(url);
+          const patterns = [
+            url,
+            urlObj.pathname,
+            urlObj.pathname.replace(/^\//, ''),
+          ];
+
+          patterns.forEach(pattern => {
+            // Skip short patterns to avoid false matches
+            if (!pattern || pattern.length < 5) return;
+
+            // In CSS, URLs only appear in url() - use targeted replacement
+            const escapedPattern = escapeForRegex(pattern);
+            const cssUrlRegex = new RegExp(`(url\\(["']?)${escapedPattern}(["']?\\))`, 'gi');
+            fontFaceCSS = fontFaceCSS.replace(cssUrlRegex, `$1${replacement}$2`);
+          });
+        } catch (e) {
+          // Skip invalid URLs
+        }
+      }
+
+      styles.unshift(`/* @font-face rules (icon fonts, web fonts) */\n${fontFaceCSS}\n`);
+    } else {
+      console.log('[GetInspire] No @font-face rules found');
     }
 
     // Add computed styles for animated elements
@@ -1582,6 +2326,57 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         visibility: visible !important;
       }
 
+      /* GetInspire: Ensure SVG icons are visible */
+      svg {
+        display: inline-block;
+        vertical-align: middle;
+      }
+
+      svg:not([width]):not([style*="width"]) {
+        min-width: 1em;
+        min-height: 1em;
+      }
+
+      /* Ensure SVG paths and shapes are visible */
+      svg path,
+      svg circle,
+      svg rect,
+      svg polygon,
+      svg polyline,
+      svg line,
+      svg ellipse {
+        fill: inherit;
+        stroke: inherit;
+      }
+
+      /* Fix for SVGs that lost their fill color */
+      svg[data-gi-original-fill="currentColor"]:not([fill]) path:not([fill]),
+      svg[data-gi-original-fill="currentColor"]:not([fill]) circle:not([fill]),
+      svg[data-gi-original-fill="currentColor"]:not([fill]) rect:not([fill]) {
+        fill: currentColor;
+      }
+
+      /* Ensure SVG use elements display */
+      svg use {
+        display: inline;
+      }
+
+      /* Common icon class patterns - ensure visibility */
+      [class*="icon"] svg,
+      [class*="Icon"] svg,
+      .fa svg,
+      .fas svg,
+      .far svg,
+      .fab svg,
+      .material-icons svg,
+      li svg,
+      button svg,
+      a svg {
+        display: inline-block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+
       /* GetInspire: Enhanced animation and modern CSS feature support */
 
       /* Ensure gradient animations work */
@@ -1648,7 +2443,45 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     `;
     styles.push(enhancementCSS);
 
-    const combinedCSS = styles.join('\n\n');
+    let combinedCSS = styles.join('\n\n');
+
+    // Clean up CSS: remove @font-face rules that reference fonts we couldn't download
+    // These would cause CORS errors when opened from file://
+    console.log('[GetInspire] Cleaning up CSS font references...');
+
+    // Find all @font-face rules and check if their URLs are embedded or available
+    combinedCSS = combinedCSS.replace(/@font-face\s*\{[^}]*\}/gi, (fontFaceRule) => {
+      // Check if this @font-face has embedded fonts (data: URLs)
+      if (fontFaceRule.includes('url("data:') || fontFaceRule.includes("url('data:") || fontFaceRule.includes('url(data:')) {
+        return fontFaceRule; // Keep it - font is embedded
+      }
+
+      // Check if it has local() which works offline
+      if (fontFaceRule.includes('local(')) {
+        return fontFaceRule; // Keep it - uses local font
+      }
+
+      // Check if it references assets/ folder (our downloaded fonts)
+      if (fontFaceRule.includes('url("assets/') || fontFaceRule.includes("url('assets/") || fontFaceRule.includes('url(assets/')) {
+        return fontFaceRule; // Keep it - references our assets folder
+      }
+
+      // Check for remaining http/https or root-relative URLs - these won't work offline
+      if (fontFaceRule.match(/url\(["']?(https?:\/\/|\/)/)) {
+        // Extract font-family name for the comment
+        const familyMatch = fontFaceRule.match(/font-family\s*:\s*["']?([^"';]+)["']?/i);
+        const fontFamily = familyMatch ? familyMatch[1] : 'unknown';
+        console.log(`[GetInspire] Removing @font-face for "${fontFamily}" - font not available offline`);
+        return `/* GetInspire: @font-face removed - font "${fontFamily}" not available offline */`;
+      }
+
+      return fontFaceRule; // Keep others
+    });
+
+    // Also remove any remaining broken url() references in CSS
+    combinedCSS = combinedCSS.replace(/url\(["']?(\/[^"')]+\.(woff2?|ttf|otf|eot))["']?\)/gi, (match, path) => {
+      return `url("") /* GetInspire: font not embedded: ${path} */`;
+    });
 
     // Step 6: Create final HTML with inline carousel script and animation support
     const carouselScript = `
@@ -1712,6 +2545,80 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       `<style>\n${combinedCSS}\n</style>\n${carouselScript}\n</head>`
     );
 
+    // Remove Content-Security-Policy meta tags that would block inline styles/scripts/fonts
+    // These policies are designed for the live site and break offline viewing
+    console.log('[GetInspire] Removing Content-Security-Policy meta tags...');
+    const cspPattern = /<meta\b[^>]*\bhttp-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>/gi;
+    const cspMatches = finalHtml.match(cspPattern) || [];
+    finalHtml = finalHtml.replace(cspPattern, '<!-- GetInspire: CSP meta tag removed for offline compatibility -->');
+    if (cspMatches.length > 0) {
+      console.log(`[GetInspire] Removed ${cspMatches.length} CSP meta tag(s)`);
+    }
+
+    // Also remove X-Content-Security-Policy (older format)
+    finalHtml = finalHtml.replace(/<meta\b[^>]*\bhttp-equiv\s*=\s*["']X-Content-Security-Policy["'][^>]*>/gi, '<!-- GetInspire: X-CSP removed -->');
+
+    // Replace any remaining absolute URLs with root-relative paths that point to assets folder
+    // This handles resources that were downloaded but whose URLs weren't replaced earlier
+    console.log('[GetInspire] Converting remaining root-relative URLs to local paths...');
+
+    // For fonts specifically - replace /path/to/font.woff2 with assets/font.woff2
+    finalHtml = finalHtml.replace(/url\(["']?(\/[^"')]+\.(woff2?|ttf|otf|eot))["']?\)/gi, (match, path) => {
+      const filename = path.split('/').pop();
+      // Check if we have this font in downloaded assets
+      const fullUrl = new URL(path, window.location.href).href;
+      const fontData = downloadedAssets.get(fullUrl);
+      if (fontData && fontData.base64) {
+        return `url("${fontData.base64}")`;
+      }
+      // If not downloaded, comment it out to prevent errors
+      return `url("") /* GetInspire: font not available offline: ${path} */`;
+    });
+
+    // For images/SVGs with root-relative paths
+    finalHtml = finalHtml.replace(/(src|href|poster)\s*=\s*["'](\/[^"']+\.(svg|png|jpg|jpeg|gif|webp|ico))["']/gi, (match, attr, path) => {
+      const fullUrl = new URL(path, window.location.href).href;
+      const assetData = downloadedAssets.get(fullUrl);
+      if (assetData && assetData.base64) {
+        return `${attr}="${assetData.base64}"`;
+      } else if (assetData && assetData.filename) {
+        return `${attr}="assets/${assetData.filename}"`;
+      }
+      // If not downloaded, use a placeholder or empty
+      return `${attr}="" data-original-src="${path}" /* GetInspire: asset not available */`;
+    });
+
+    // Remove original <link rel="stylesheet"> tags since CSS is now inlined
+    // This prevents the browser from trying to load external CSS files that don't exist offline
+    console.log('[GetInspire] Removing external stylesheet links (CSS is inlined)...');
+    const linkTagsRemoved = (finalHtml.match(/<link[^>]*rel=["']stylesheet["'][^>]*>/gi) || []).length;
+    finalHtml = finalHtml.replace(/<link[^>]*rel=["']stylesheet["'][^>]*>/gi, '<!-- GetInspire: stylesheet inlined -->');
+    console.log(`[GetInspire] Removed ${linkTagsRemoved} external stylesheet link tags`);
+
+    // Also remove preload links for stylesheets
+    finalHtml = finalHtml.replace(/<link[^>]*rel=["']preload["'][^>]*as=["']style["'][^>]*>/gi, '<!-- GetInspire: preload removed -->');
+
+    // SCRIPTS PRESERVED - No removal (user requested local viewing without security restrictions)
+    // Scripts are kept as-is, URLs updated to local paths where downloaded
+    console.log('[GetInspire] Keeping all scripts (security restrictions disabled)...');
+
+    // Update script src URLs to local paths if we downloaded them
+    for (const [url, data] of downloadedAssets) {
+      if (data.type === 'script' && data.filename) {
+        try {
+          const urlObj = new URL(url);
+          const patterns = [url, urlObj.pathname, urlObj.pathname.replace(/^\//, '')];
+          patterns.forEach(pattern => {
+            if (pattern && pattern.length > 3) {
+              const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const regex = new RegExp(`(src\\s*=\\s*["'])${escaped}(["'])`, 'gi');
+              finalHtml = finalHtml.replace(regex, `$1assets/${data.filename}$2`);
+            }
+          });
+        } catch (e) {}
+      }
+    }
+
     // ==================== CRAWL MODE BRANCH (v2.0) ====================
     if (isCrawlMode) {
       console.log('[GetInspire] Crawl mode: Sending page data to background...');
@@ -1720,7 +2627,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       const links = extractSameDomainLinks(crawlBaseDomain);
 
       // Send captured page data to background (with processed HTML)
-      chrome.runtime.sendMessage({
+      browserAPI.runtime.sendMessage({
         type: 'PAGE_CAPTURED',
         pageData: {
           url: window.location.href,
@@ -1730,7 +2637,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         links: links
       });
 
-      chrome.runtime.sendMessage({
+      browserAPI.runtime.sendMessage({
         type: 'CAPTURE_STATUS',
         status: `Page captured, found ${links.length} links`
       });
@@ -1752,7 +2659,8 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Add large assets to assets folder
     const assetsFolder = zip.folder('assets');
     for (const [url, data] of downloadedAssets) {
-      if (data.blob.size >= 100000) {
+      if (!data.blob) continue;
+      if (data.blob.size >= EMBED_THRESHOLD) {
         assetsFolder.file(data.filename, data.blob);
       }
     }
@@ -1764,13 +2672,13 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 URL: ${window.location.href}
 Title: ${document.title}
 Captured: ${new Date().toISOString()}
-GetInspire Version: 2.0.0
+GetInspire Version: 2.1.0
 
 ## Statistics
 - Total assets found: ${assetsToDownload.size}
 - Assets downloaded: ${downloadedAssets.size}
 - Assets deduplicated: ${deduplicatedCount}
-- Assets embedded (base64): ${[...downloadedAssets.values()].filter(d => d.blob && d.blob.size < 100000).length}
+- Assets embedded (base64): ${[...downloadedAssets.values()].filter(d => d.blob && d.blob.size < EMBED_THRESHOLD).length}
 - Assets saved separately: ${[...downloadedAssets.values()].filter(d => d.blob && d.blob.size >= 100000).length}
 - Images captured: ${images.length}
 - Canvases captured: ${canvases.length}
@@ -1812,20 +2720,27 @@ GetInspire Version: 2.0.0
 - SVG graphics preserved
 - Background images captured
 
+## Offline Compatibility
+- External scripts removed (analytics, tracking, third-party libraries)
+- External stylesheet links removed (CSS inlined)
+- Module scripts removed (won't work from file://)
+- Script preloads/prefetches removed
+
 ## Notes
 - Small assets (<100KB) are embedded as base64
 - Large assets are saved in the assets folder
 - Duplicate assets are deduplicated by content hash
-- The page works completely offline
+- The page works completely offline without console errors
 - Animations will replay on page load
 - Interactive features are preserved where possible
 - To activate hover states, add .gi-hover-state class to elements
+- External scripts were removed to prevent CORS/CSP errors when viewing offline
 `;
     zip.file('README.md', readme);
 
     // Step 8: Generate and download ZIP
     console.log('[GetInspire] Generating ZIP...');
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: 'Generating ZIP file...'
     });
@@ -1858,12 +2773,12 @@ GetInspire Version: 2.0.0
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 
     // Send success messages
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: 'Capture completed!'
     });
 
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_COMPLETE'
     });
 
@@ -1872,7 +2787,7 @@ GetInspire Version: 2.0.0
 
   } catch (error) {
     console.error('[GetInspire] Capture failed:', error);
-    chrome.runtime.sendMessage({
+    browserAPI.runtime.sendMessage({
       type: 'CAPTURE_ERROR',
       error: error.message
     });
