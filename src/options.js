@@ -1,223 +1,186 @@
-// Options page functionality for GetInspire
-// Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
+// Options page for GetInspire
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+console.log('[GetInspire Options] Initializing');
 
-(async () => {
-  console.log('[GetInspire Options] Initializing...');
+// Defaults
+const defaults = {
+  maxMillis: 120000,
+  maxAssets: 50000,
+  maxZipMB: 2000,
+  concurrency: 25,
+  redact: false,
+  saveWithoutPrompt: false,
+  skipVideo: false,
+  replaceIframesWithPoster: true,
+  stripScripts: false,
+  showOverlay: true,
+  fontFallback: true,
+  denylist: []
+};
 
-  // Load shared defaults
-  const { defaults } = await import(browserAPI.runtime.getURL('src/defaults.js')).catch(() => ({
-    defaults: {
-      maxMillis: 20_000,
-      maxAssets: 5000,
-      maxZipMB: 1000,
-      concurrency: 20,
-      redact: false,
-      saveWithoutPrompt: false,
-      skipVideo: false,
-      replaceIframesWithPoster: true,
-      stripScripts: true,
-      showOverlay: false,
-      fontFallback: true,
-      denylist: []
-    }
-  }));
+// DOM elements
+const els = {
+  maxMillis: document.getElementById('maxMillis'),
+  maxAssets: document.getElementById('maxAssets'),
+  maxZipMB: document.getElementById('maxZipMB'),
+  concurrency: document.getElementById('concurrency'),
+  denylist: document.getElementById('denylist'),
+  redact: document.getElementById('redact'),
+  saveWithoutPrompt: document.getElementById('saveWithoutPrompt'),
+  skipVideo: document.getElementById('skipVideo'),
+  replaceIframesWithPoster: document.getElementById('replaceIframesWithPoster'),
+  stripScripts: document.getElementById('stripScripts'),
+  showOverlay: document.getElementById('showOverlay'),
+  fontFallback: document.getElementById('fontFallback'),
+  saveBtn: document.getElementById('saveBtn'),
+  saved: document.getElementById('saved'),
+  presetSocial: document.getElementById('presetSocial'),
+  presetSearch: document.getElementById('presetSearch'),
+  themeToggle: document.getElementById('themeToggle'),
+  themeIcon: document.getElementById('themeIcon'),
+  themeLabel: document.getElementById('themeLabel')
+};
 
-  // Get all form elements
-  const els = {
-    maxMillis: document.getElementById('maxMillis'),
-    maxAssets: document.getElementById('maxAssets'),
-    maxZipMB: document.getElementById('maxZipMB'),
-    concurrency: document.getElementById('concurrency'),
-    denylist: document.getElementById('denylist'),
-    redact: document.getElementById('redact'),
-    saveWithoutPrompt: document.getElementById('saveWithoutPrompt'),
-    skipVideo: document.getElementById('skipVideo'),
-    replaceIframesWithPoster: document.getElementById('replaceIframesWithPoster'),
-    stripScripts: document.getElementById('stripScripts'),
-    showOverlay: document.getElementById('showOverlay'),
-    fontFallback: document.getElementById('fontFallback'),
-    saveBtn: document.getElementById('saveBtn'),
-    saved: document.getElementById('saved'),
-    presetSocial: document.getElementById('presetSocial'),
-    presetSearch: document.getElementById('presetSearch'),
+// Theme management
+let currentTheme = 'light';
+
+function updateThemeUI(theme) {
+  const sunIcon = `<circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>`;
+  const moonIcon = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
+
+  if (els.themeIcon) {
+    els.themeIcon.innerHTML = theme === 'dark' ? moonIcon : sunIcon;
+  }
+  if (els.themeLabel) {
+    els.themeLabel.textContent = theme === 'dark' ? 'Dark' : 'Light';
+  }
+}
+
+function setTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeUI(theme);
+  browserAPI.storage.sync.set({ getinspireTheme: theme });
+}
+
+function toggleTheme() {
+  setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+
+// Initialize theme
+browserAPI.storage.sync.get(['getinspireTheme'], (result) => {
+  currentTheme = result.getinspireTheme === 'dark' ? 'dark' : 'light';
+  updateThemeUI(currentTheme);
+});
+
+if (els.themeToggle) {
+  els.themeToggle.addEventListener('click', toggleTheme);
+}
+
+// Load settings
+function loadSettings() {
+  browserAPI.storage.sync.get(['getinspireOptions'], (result) => {
+    const opts = result.getinspireOptions || {};
+
+    // Number inputs (convert ms to seconds for display)
+    if (els.maxMillis) els.maxMillis.value = Math.floor((opts.maxMillis ?? defaults.maxMillis) / 1000);
+    if (els.maxAssets) els.maxAssets.value = opts.maxAssets ?? defaults.maxAssets;
+    if (els.maxZipMB) els.maxZipMB.value = opts.maxZipMB ?? defaults.maxZipMB;
+    if (els.concurrency) els.concurrency.value = opts.concurrency ?? defaults.concurrency;
+
+    // Checkboxes
+    if (els.redact) els.redact.checked = opts.redact ?? defaults.redact;
+    if (els.saveWithoutPrompt) els.saveWithoutPrompt.checked = opts.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
+    if (els.skipVideo) els.skipVideo.checked = opts.skipVideo ?? defaults.skipVideo;
+    if (els.replaceIframesWithPoster) els.replaceIframesWithPoster.checked = opts.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster;
+    if (els.stripScripts) els.stripScripts.checked = opts.stripScripts ?? defaults.stripScripts;
+    if (els.showOverlay) els.showOverlay.checked = opts.showOverlay ?? defaults.showOverlay;
+    if (els.fontFallback) els.fontFallback.checked = opts.fontFallback ?? defaults.fontFallback;
+
+    // Denylist
+    const denylist = opts.denylist ?? defaults.denylist;
+    if (els.denylist) els.denylist.value = Array.isArray(denylist) ? denylist.join('\n') : '';
+
+    console.log('[GetInspire Options] Loaded');
+  });
+}
+
+// Save settings
+function saveSettings() {
+  const denylistLines = (els.denylist?.value || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
+  const getNum = (el, def, mult = 1) => {
+    const v = Number(el?.value);
+    return (Number.isFinite(v) && v > 0) ? v * mult : def;
   };
 
-  // Load settings from storage
-  function loadSettings() {
-    console.log('[GetInspire Options] Loading settings...');
+  const options = {
+    maxMillis: getNum(els.maxMillis, defaults.maxMillis, 1000),
+    maxAssets: getNum(els.maxAssets, defaults.maxAssets),
+    maxZipMB: getNum(els.maxZipMB, defaults.maxZipMB),
+    concurrency: getNum(els.concurrency, defaults.concurrency),
+    redact: els.redact?.checked ?? defaults.redact,
+    saveWithoutPrompt: els.saveWithoutPrompt?.checked ?? defaults.saveWithoutPrompt,
+    skipVideo: els.skipVideo?.checked ?? defaults.skipVideo,
+    replaceIframesWithPoster: els.replaceIframesWithPoster?.checked ?? defaults.replaceIframesWithPoster,
+    stripScripts: els.stripScripts?.checked ?? defaults.stripScripts,
+    showOverlay: els.showOverlay?.checked ?? defaults.showOverlay,
+    fontFallback: els.fontFallback?.checked ?? defaults.fontFallback,
+    denylist: denylistLines
+  };
 
-    browserAPI.storage.sync.get(['getinspireOptions'], (result) => {
-      const options = result.getinspireOptions || {};
-
-      // Load number inputs (convert milliseconds to seconds for display)
-      els.maxMillis.value = Math.floor((options.maxMillis ?? defaults.maxMillis) / 1000);
-      els.maxAssets.value = options.maxAssets ?? defaults.maxAssets;
-      els.maxZipMB.value = options.maxZipMB ?? defaults.maxZipMB;
-      els.concurrency.value = options.concurrency ?? defaults.concurrency;
-
-      // Load checkboxes
-      els.redact.checked = options.redact ?? defaults.redact;
-      els.saveWithoutPrompt.checked = options.saveWithoutPrompt ?? defaults.saveWithoutPrompt;
-      els.skipVideo.checked = options.skipVideo ?? defaults.skipVideo;
-      els.replaceIframesWithPoster.checked = options.replaceIframesWithPoster ?? defaults.replaceIframesWithPoster;
-      els.stripScripts.checked = options.stripScripts ?? defaults.stripScripts;
-      els.showOverlay.checked = options.showOverlay ?? defaults.showOverlay;
-      els.fontFallback.checked = options.fontFallback ?? defaults.fontFallback;
-
-      // Load denylist
-      const denylist = options.denylist ?? defaults.denylist;
-      els.denylist.value = Array.isArray(denylist) ? denylist.join('\n') : '';
-
-      console.log('[GetInspire Options] Settings loaded successfully');
-    });
-  }
-
-  // Save settings to storage
-  function saveSettings() {
-    console.log('[GetInspire Options] Saving settings...');
-
-    // Parse denylist
-    const denylistLines = els.denylist.value
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
-
-    // Get number values
-    const getNumber = (element, defaultValue, multiplier = 1) => {
-      const value = Number(element.value);
-      return (Number.isFinite(value) && value > 0) ? value * multiplier : defaultValue;
-    };
-
-    // Build options object
-    const options = {
-      maxMillis: getNumber(els.maxMillis, defaults.maxMillis, 1000), // Convert seconds to ms
-      maxAssets: getNumber(els.maxAssets, defaults.maxAssets),
-      maxZipMB: getNumber(els.maxZipMB, defaults.maxZipMB),
-      concurrency: getNumber(els.concurrency, defaults.concurrency),
-      redact: els.redact.checked,
-      saveWithoutPrompt: els.saveWithoutPrompt.checked,
-      skipVideo: els.skipVideo.checked,
-      replaceIframesWithPoster: els.replaceIframesWithPoster.checked,
-      stripScripts: els.stripScripts.checked,
-      showOverlay: els.showOverlay.checked,
-      fontFallback: els.fontFallback.checked,
-      denylist: denylistLines
-    };
-
-    // Save to storage
-    browserAPI.storage.sync.set({
-      getinspireOptions: options
-    }, () => {
-      console.log('[GetInspire Options] Settings saved successfully');
-
-      // Show success message with animation
+  browserAPI.storage.sync.set({ getinspireOptions: options }, () => {
+    console.log('[GetInspire Options] Saved');
+    if (els.saved) {
       els.saved.classList.add('show');
-      setTimeout(() => {
-        els.saved.classList.remove('show');
-      }, 2000);
-    });
-  }
+      setTimeout(() => els.saved.classList.remove('show'), 2000);
+    }
+  });
+}
 
-  // Add preset patterns to denylist
-  function addPreset(patterns) {
-    const currentLines = els.denylist.value
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
+// Preset patterns
+const presets = {
+  social: [
+    'https?://([^/]+\\.)?(twitter\\.com|x\\.com)/',
+    'https?://([^/]+\\.)?(facebook\\.com|instagram\\.com|tiktok\\.com)/',
+    'https?://([^/]+\\.)?reddit\\.com/',
+    'https?://([^/]+\\.)?linkedin\\.com/feed'
+  ],
+  search: [
+    'https?://(www\\.)?google\\.[^/]+/search',
+    'https?://(www\\.)?bing\\.com/search',
+    'https?://(www\\.)?duckduckgo\\.com/'
+  ]
+};
 
-    const uniqueLines = new Set([...currentLines, ...patterns]);
-    els.denylist.value = Array.from(uniqueLines).join('\n');
+function addPreset(patterns) {
+  const current = (els.denylist?.value || '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
 
-    // Add visual feedback
-    els.denylist.style.borderColor = 'var(--ui-accent)';
-    setTimeout(() => {
-      els.denylist.style.borderColor = '';
-    }, 300);
-  }
+  const unique = [...new Set([...current, ...patterns])];
+  if (els.denylist) els.denylist.value = unique.join('\n');
+}
 
-  // Preset patterns
-  const socialPresets = [
-    '/https?:\\/\\/([^\\/]+\\.)?(x\\.com|twitter\\.com)\\//i',
-    '/https?:\\/\\/([^\\/]+\\.)?(facebook\\.com|instagram\\.com|tiktok\\.com)\\//i',
-    '/https?:\\/\\/([^\\/]+\\.)?(reddit\\.com)\\//i',
-    '/https?:\\/\\/([^\\/]+\\.)?linkedin\\.com\\/feed/i',
-    '/https?:\\/\\/([^\\/]+\\.)?pinterest\\.[^\\/]+\\//i',
-    '/https?:\\/\\/([^\\/]+\\.)?tumblr\\.com\\/dashboard/i'
-  ];
-
-  const searchPresets = [
-    '/https?:\\/\\/(www\\.)?google\\.[^\\/]+\\/search/i',
-    '/https?:\\/\\/(www\\.)?bing\\.com\\/search/i',
-    '/https?:\\/\\/(www\\.)?duckduckgo\\.com\\//i',
-    '/https?:\\/\\/news\\.google\\.com\\//i'
-  ];
-
-  // Event listeners
+// Event listeners
+if (els.saveBtn) {
   els.saveBtn.addEventListener('click', (e) => {
     e.preventDefault();
-
-    // Add button feedback
-    els.saveBtn.style.transform = 'scale(0.95)';
-    setTimeout(() => {
-      els.saveBtn.style.transform = '';
-    }, 100);
-
     saveSettings();
   });
+}
 
-  if (els.presetSocial) {
-    els.presetSocial.addEventListener('click', () => {
-      addPreset(socialPresets);
-    });
-  }
+if (els.presetSocial) {
+  els.presetSocial.addEventListener('click', () => addPreset(presets.social));
+}
 
-  if (els.presetSearch) {
-    els.presetSearch.addEventListener('click', () => {
-      addPreset(searchPresets);
-    });
-  }
+if (els.presetSearch) {
+  els.presetSearch.addEventListener('click', () => addPreset(presets.search));
+}
 
-  // Add micro-interactions for number inputs
-  [els.maxMillis, els.maxAssets, els.maxZipMB, els.concurrency].forEach(input => {
-    if (!input) return;
-
-    input.addEventListener('focus', () => {
-      input.style.borderColor = 'var(--ui-accent)';
-    });
-
-    input.addEventListener('blur', () => {
-      input.style.borderColor = '';
-    });
-
-    input.addEventListener('input', () => {
-      // Validate on input
-      const value = Number(input.value);
-      if (!Number.isFinite(value) || value <= 0) {
-        input.style.borderColor = '#ef4444';
-      } else {
-        input.style.borderColor = 'var(--ui-accent)';
-      }
-    });
-  });
-
-  // Add micro-interactions for textarea
-  if (els.denylist) {
-    els.denylist.addEventListener('focus', () => {
-      els.denylist.style.borderColor = 'var(--ui-accent)';
-    });
-
-    els.denylist.addEventListener('blur', () => {
-      els.denylist.style.borderColor = '';
-    });
-  }
-
-  // Initialize: Load settings when page is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadSettings);
-  } else {
-    loadSettings();
-  }
-
-  console.log('[GetInspire Options] Initialization complete');
-})();
+// Initialize
+loadSettings();

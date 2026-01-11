@@ -2,348 +2,42 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <script>
+    // Apply theme immediately before CSS loads
+    (function() {
+      const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+      browserAPI.storage.sync.get(['getinspireTheme'], function(result) {
+        document.documentElement.setAttribute('data-theme', result.getinspireTheme === 'dark' ? 'dark' : 'light');
+      });
+    })();
+  </script>
   <link rel="stylesheet" href="ui.css">
-  <style>
-    /* Theme variables - Light */
-    html, html[data-theme="light"] {
-      --gi-bg: #ffffff;
-      --gi-text: #0f172a;
-      --gi-subtle: #64748b;
-      --gi-stroke: rgba(0, 0, 0, 0.08);
-      --gi-accent: #3b82f6;
-      --gi-button-bg: rgba(255, 255, 255, 0.6);
-      --gi-button-hover: rgba(59, 130, 246, 0.1);
-      --gi-panel-bg: rgba(255, 255, 255, 0.4);
-    }
-
-    html[data-theme="dark"] {
-      --gi-bg: #000000;
-      --gi-text: #ffffff;
-      --gi-subtle: #d1d5db;
-      --gi-stroke: rgba(255, 255, 255, 0.2);
-      --gi-accent: #60a5fa;
-      --gi-button-bg: rgba(255, 255, 255, 0.12);
-      --gi-button-hover: rgba(96, 165, 250, 0.25);
-      --gi-panel-bg: rgba(255, 255, 255, 0.08);
-    }
-
-    body {
-      width: 300px;
-      padding: 12px;
-      margin: 0;
-      background: var(--gi-bg);
-      color: var(--gi-text);
-      transition: background-color 0.3s ease, color 0.3s ease;
-    }
-
-    /* Top bar with actions on the right */
-    .gi .gi-top {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    .gi .gi-top .title {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .gi .brand .logo {
-      width: 22px;
-      height: 22px;
-      color: var(--gi-text);
-      display: block;
-    }
-
-    .gi .brand span {
-      font-weight: 700;
-      letter-spacing: .2px;
-    }
-
-    .gi .icon-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px;
-      height: 28px;
-      border: 1px solid var(--gi-stroke);
-      border-radius: 8px;
-      background: var(--gi-button-bg);
-      color: var(--gi-text);
-      text-decoration: none;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      will-change: transform, box-shadow;
-    }
-
-    .gi .icon-btn:hover {
-      background: var(--gi-button-hover);
-      border-color: var(--gi-accent);
-    }
-
-    .gi .icon-btn:active {
-      transform: translateY(1px);
-    }
-
-    .gi .icon-btn svg {
-      width: 16px;
-      height: 16px;
-      display: block;
-    }
-
-    /* Dark mode enhancements */
-    html[data-theme="dark"] .gi .icon-btn {
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    }
-
-    .gi button {
-      appearance: none;
-      border: 1px solid var(--gi-stroke);
-      border-radius: 10px;
-      padding: 9px 14px;
-      cursor: pointer;
-      background: var(--gi-button-bg);
-      color: var(--gi-text);
-      font-weight: 500;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      will-change: transform, box-shadow;
-    }
-
-    .gi button:hover {
-      background: var(--gi-button-hover);
-      border-color: var(--gi-accent);
-      transform: translateY(-1px);
-    }
-
-    .gi button:active {
-      transform: translateY(1px);
-    }
-
-    .gi button.selected {
-      border-color: var(--gi-accent);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, .35);
-    }
-
-    .gi #startBtn {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.25));
-      border-color: rgba(99, 102, 241, 0.45);
-    }
-
-    html[data-theme="dark"] .gi #startBtn {
-      background: linear-gradient(180deg, rgba(96, 165, 250, 0.25), rgba(96, 165, 250, 0.12));
-      border-color: rgba(96, 165, 250, 0.5);
-    }
-
-    .gi #startBtn:hover {
-      box-shadow: 0 6px 18px rgba(59, 130, 246, .25);
-    }
-
-    .gi #stopBtn[disabled] {
-      opacity: .55;
-      cursor: not-allowed;
-    }
-
-    .gi .gi-row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    .gi .gi-row button {
-      flex: 1;
-    }
-
-    .gi .status {
-      margin-bottom: 8px;
-      font-size: 12px;
-      color: var(--gi-text);
-      min-height: 1.5em;
-      font-weight: 400;
-    }
-
-    .gi .gi-top.panel {
-      background: var(--gi-panel-bg);
-      border: 1px solid var(--gi-stroke);
-      padding: 8px;
-      border-radius: 12px;
-    }
-
-    .gi .gi-progress-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .gi .gi-progress {
-      margin-top: 6px;
-      height: 10px;
-      background: var(--gi-button-bg);
-      border: 1px solid var(--gi-stroke);
-      border-radius: 999px;
-      overflow: hidden;
-      flex: 1;
-      min-width: 0;
-    }
-
-    .gi .gi-progress #bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, var(--gi-accent), #a78bfa);
-      transition: width .2s ease-out;
-      will-change: width;
-    }
-
-    .gi .pct {
-      min-width: 32px;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-      color: var(--gi-text);
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .gi .meta {
-      margin-top: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: 12px;
-      color: var(--gi-text);
-      opacity: 0.8;
-    }
-
-    .gi #hint {
-      display: block;
-      margin-top: 8px;
-      font-size: 10px;
-      color: var(--gi-text);
-      text-align: center;
-      opacity: 0.6;
-    }
-
-    /* Mode selector (v2.0) */
-    .gi .gi-mode-selector {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 10px;
-    }
-
-    .gi .mode-btn {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 8px 10px;
-      background: var(--gi-button-bg);
-      border: 1px solid var(--gi-stroke);
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--gi-text);
-      transition: all 0.2s ease;
-    }
-
-    .gi .mode-btn svg {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-    }
-
-    .gi .mode-btn:hover {
-      background: var(--gi-button-hover);
-      border-color: var(--gi-accent);
-    }
-
-    .gi .mode-btn.selected {
-      background: var(--gi-button-hover);
-      border-color: var(--gi-accent);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    }
-
-    html[data-theme="dark"] .gi .mode-btn.selected {
-      box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
-    }
-
-    /* Crawl options (v2.0) */
-    .gi .crawl-options {
-      margin-bottom: 10px;
-      padding: 10px;
-      background: var(--gi-panel-bg);
-      border: 1px solid var(--gi-stroke);
-      border-radius: 8px;
-    }
-
-    .gi .crawl-label {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      color: var(--gi-text);
-    }
-
-    .gi .crawl-label input {
-      width: 70px;
-      padding: 6px 8px;
-      border: 1px solid var(--gi-stroke);
-      border-radius: 6px;
-      background: var(--gi-bg);
-      color: var(--gi-text);
-      font-size: 12px;
-      text-align: center;
-    }
-
-    .gi .crawl-label input:focus {
-      outline: none;
-      border-color: var(--gi-accent);
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    }
-  </style>
+  <link rel="stylesheet" href="popup.css">
 </head>
-<body class="gi">
-  <div class="gi-top panel">
-    <h3 class="title brand">
-      <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <!-- bulb outline -->
+<body>
+  <!-- Header -->
+  <div class="popup-header">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 3a7 7 0 0 0-5 11c.9 1.1 1.5 1.9 1.7 3 .1.7.7 1 1.3 1h3c.6 0 1.2-.3 1.3-1 .2-1.1.8-1.9 1.7-3A7 7 0 0 0 12 3z"/>
-        <!-- bulb base -->
         <path d="M9.5 19.5h5M10 22h4"/>
-        <!-- leaf inside -->
         <path d="M12 8c2.8 0 4.8 1 4.8 1s-1.3 5.2-5.3 5.2c-1.1 0-1.9-.3-2.5-.8 0-3.2 1.4-5.4 3-5.4z" fill="currentColor" stroke="none"/>
-        <!-- rays -->
-        <path d="M16.8 5.2l.9-1.5M18.9 7.4l1.6-.6M7.2 5.2l-.9-1.5"/>
       </svg>
-      <span>GetInspire</span>
-    </h3>
-    <a href="#" id="themeToggle" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
-      <!-- sun/moon icon (will be updated by JS) -->
-      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="5"/>
-        <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>
-      </svg>
-    </a>
-    <a href="#" id="openOptionsLink" class="icon-btn" title="Options" aria-label="Options">
-      <!-- gear icon -->
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <span class="brand-name">GetInspire</span>
+    </div>
+    <a href="#" id="openOptionsLink" class="icon-btn" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09c0 .67.39 1.27 1 1.51.6.24 1.28.11 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.44.54-.57 1.22-.33 1.82.24.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.27.39-1.51 1z"/>
       </svg>
     </a>
   </div>
 
-  <!-- Mode selector (v2.0) -->
-  <div class="gi-mode-selector">
+  <!-- Mode Selector - Segmented Control -->
+  <div class="mode-selector">
     <button id="singleModeBtn" class="mode-btn selected" aria-pressed="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-        <line x1="9" y1="9" x2="15" y2="9"/>
-        <line x1="9" y1="13" x2="15" y2="13"/>
-        <line x1="9" y1="17" x2="12" y2="17"/>
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
       </svg>
       <span>Single Page</span>
     </button>
@@ -356,37 +50,34 @@
     </button>
   </div>
 
-  <!-- Crawl options (hidden by default) -->
-  <div id="crawlOptions" class="crawl-options" style="display: none;">
-    <label class="crawl-label">
-      <span>Max pages:</span>
-      <input type="number" id="maxPages" value="10" min="1" max="500" />
+  <!-- Crawl Options (hidden by default) -->
+  <div id="crawlOptions" class="crawl-options hidden">
+    <label>
+      <span>Max pages to crawl:</span>
+      <input type="number" id="maxPages" value="10" min="1" max="500">
     </label>
   </div>
 
-  <div class="gi-row">
-    <button id="startBtn" class="selected" aria-pressed="true">Start capture</button>
-    <button id="stopBtn" disabled>Stop</button>
-  </div>
+  <!-- Action Button - Shows Start or Stop based on state -->
+  <button id="startBtn" class="action-btn primary">Start Capture</button>
+  <button id="stopBtn" class="action-btn danger hidden">Stop Capture</button>
 
-  <div class="status" id="status">Ready to start</div>
+  <!-- Status -->
+  <div class="status-text" id="status">Ready to capture</div>
 
-  <div class="gi-row gi-progress-row">
-    <div class="gi-progress" style="flex:1">
-      <div id="bar"></div>
+  <!-- Progress -->
+  <div class="progress-container">
+    <div class="progress-bar">
+      <div id="bar" class="bar"></div>
     </div>
-    <div class="pct" id="pct">0%</div>
+    <div class="progress-meta">
+      <span id="countMeta">0 assets</span>
+      <span id="elapsedMeta">0s</span>
+      <span id="pct" class="pct">0%</span>
+    </div>
   </div>
-
-  <div class="meta" id="meta" aria-live="polite">
-    <span id="countMeta">0/0</span>
-    <span id="elapsedMeta">0s</span>
-  </div>
-
-  <small id="hint">Scan → Scroll → Collect → Rewrite → Zip → Download</small>
 
   <script src="browser-polyfill.js"></script>
-  <script src="theme.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

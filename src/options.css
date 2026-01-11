@@ -1,0 +1,347 @@
+/* GetInspire Options Page Styles */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Modern scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--ui-stroke);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-subtle);
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.header-content h1 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ui-text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-content p {
+  margin: 0;
+  color: var(--ui-subtle);
+  font-size: 13px;
+}
+
+.header-icon {
+  width: 26px;
+  height: 26px;
+  color: var(--ui-accent);
+}
+
+/* Theme Toggle in Header */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--ui-muted-surface);
+  border: 1px solid var(--ui-stroke);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.theme-toggle:hover {
+  border-color: var(--ui-accent);
+}
+
+.theme-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ui-accent);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ui-text);
+}
+
+.theme-toggle span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ui-text);
+}
+
+/* Settings sections */
+.settings-section {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-stroke);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--ui-accent);
+}
+
+/* Form groups */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-text);
+}
+
+.form-description {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ui-subtle);
+  font-weight: 400;
+}
+
+/* Input fields */
+input[type="number"],
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-stroke);
+  border-radius: 8px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+input[type="number"]:invalid,
+textarea:invalid {
+  border-color: #ef4444;
+}
+
+input[type="number"]:invalid:focus,
+textarea:invalid:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* Checkbox/Radio */
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.checkbox-item:hover {
+  background: var(--ui-muted-surface);
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: var(--ui-accent);
+  border-radius: 4px;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.checkbox-item label {
+  flex: 1;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ui-text);
+  line-height: 1.4;
+}
+
+.checkbox-item label .form-description {
+  margin-top: 2px;
+}
+
+/* Preset buttons - Above textarea */
+.preset-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.btn-preset {
+  padding: 6px 12px;
+  background: var(--ui-muted-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-stroke);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-preset:hover {
+  background: var(--ui-surface);
+  border-color: var(--ui-accent);
+}
+
+.btn-preset:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ui-accent);
+}
+
+/* Buttons */
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ui-stroke);
+}
+
+.btn-save {
+  padding: 10px 20px;
+  background: var(--ui-accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-save:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+.btn-save:active {
+  transform: translateY(0);
+}
+
+.btn-save:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+}
+
+/* Success message */
+.success-message {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  color: #10b981;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.success-message.show {
+  display: flex;
+}
+
+.success-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Grid layout for number inputs */
+.input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.input-grid + .input-grid {
+  margin-top: 12px;
+}

@@ -1,10 +1,10 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8">
   <title>GetInspire Settings</title>
   <script>
-    // Apply theme immediately before CSS loads to prevent flash
+    // Apply theme immediately before CSS loads
     (function() {
       const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
       browserAPI.storage.sync.get(['getinspireTheme'], function(result) {
@@ -12,305 +12,30 @@
       });
     })();
   </script>
-  <link rel="stylesheet" href="ui.css" />
-  <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
-    }
-
-    /* Modern scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: var(--ui-stroke);
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--ui-subtle);
-    }
-    html[data-theme="dark"] ::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.2);
-    }
-    html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255,255,255,0.3);
-    }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      min-height: 100vh;
-      background: var(--ui-bg);
-      color: var(--ui-text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .container {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 32px 24px;
-    }
-
-    /* Header */
-    .header {
-      margin-bottom: 28px;
-    }
-
-    .header h1 {
-      margin: 0 0 6px 0;
-      font-size: 24px;
-      font-weight: 600;
-      color: var(--ui-text);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .header-icon {
-      width: 28px;
-      height: 28px;
-      color: var(--ui-accent);
-    }
-
-    .header p {
-      margin: 0;
-      color: var(--ui-subtle);
-      font-size: 13px;
-    }
-
-    /* Settings sections */
-    .settings-section {
-      background: var(--ui-surface);
-      border: 1px solid var(--ui-stroke);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-    }
-
-    .section-title {
-      margin: 0 0 16px 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--ui-text);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .section-icon {
-      width: 18px;
-      height: 18px;
-      color: var(--ui-accent);
-    }
-
-    /* Form groups */
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-group:last-child {
-      margin-bottom: 0;
-    }
-
-    .form-label {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--ui-text);
-    }
-
-    .form-description {
-      display: block;
-      margin-top: 2px;
-      font-size: 11px;
-      color: var(--ui-subtle);
-      font-weight: 400;
-    }
-
-    /* Input fields */
-    input[type="number"],
-    textarea {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--ui-stroke);
-      border-radius: 8px;
-      background: var(--ui-bg);
-      color: var(--ui-text);
-      font-size: 13px;
-      font-family: inherit;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
-      -moz-appearance: textfield;
-    }
-
-    input[type="number"]::-webkit-outer-spin-button,
-    input[type="number"]::-webkit-inner-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-
-    input[type="number"]:focus,
-    textarea:focus {
-      outline: none;
-      border-color: var(--ui-accent);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 80px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
-    }
-
-    /* Checkbox/Radio */
-    .checkbox-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .checkbox-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      cursor: pointer;
-      padding: 10px 12px;
-      border-radius: 8px;
-      transition: background 0.15s ease;
-      border: 1px solid transparent;
-    }
-
-    .checkbox-item:hover {
-      background: var(--ui-muted-surface);
-    }
-
-    input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      min-width: 16px;
-      margin-top: 2px;
-      cursor: pointer;
-      accent-color: var(--ui-accent);
-      border-radius: 4px;
-    }
-
-    .checkbox-item label {
-      flex: 1;
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--ui-text);
-      line-height: 1.4;
-    }
-
-    .checkbox-item label .form-description {
-      margin-top: 2px;
-    }
-
-    /* Buttons */
-    .button-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid var(--ui-stroke);
-    }
-
-    .btn-save {
-      padding: 10px 20px;
-      background: var(--ui-accent);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-save:hover {
-      background: #2563eb;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-    }
-
-    .btn-save:active {
-      transform: translateY(0);
-    }
-
-    /* Preset buttons */
-    .preset-buttons {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .btn-preset {
-      padding: 6px 12px;
-      background: var(--ui-muted-surface);
-      color: var(--ui-text);
-      border: 1px solid var(--ui-stroke);
-      border-radius: 6px;
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .btn-preset:hover {
-      background: var(--ui-surface);
-      border-color: var(--ui-accent);
-    }
-
-    /* Success message */
-    .success-message {
-      display: none;
-      align-items: center;
-      gap: 6px;
-      color: #10b981;
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .success-message.show {
-      display: flex;
-    }
-
-    .success-icon {
-      width: 16px;
-      height: 16px;
-    }
-
-    /* Grid layout for number inputs */
-    .input-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-
-    .input-grid + .input-grid {
-      margin-top: 12px;
-    }
-  </style>
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <div class="container">
-    <!-- Header -->
+    <!-- Header with Theme Toggle -->
     <div class="header">
-      <h1>
-        <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09c0 .67.39 1.27 1 1.51.6.24 1.28.11 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.44.54-.57 1.22-.33 1.82.24.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.27.39-1.51 1z"/>
+      <div class="header-content">
+        <h1>
+          <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09c0 .67.39 1.27 1 1.51.6.24 1.28.11 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.44.54-.57 1.22-.33 1.82.24.61.84 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.67 0-1.27.39-1.51 1z"/>
+          </svg>
+          Settings
+        </h1>
+        <p>Customize how GetInspire captures web pages</p>
+      </div>
+      <button id="themeToggle" class="theme-toggle" title="Toggle theme">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
         </svg>
-        Settings
-      </h1>
-      <p>Customize how GetInspire captures and saves web pages</p>
+        <span id="themeLabel">Light</span>
+      </button>
     </div>
 
     <!-- Performance Section -->
@@ -325,16 +50,16 @@
         <div class="form-group">
           <label class="form-label" for="maxMillis">
             Max Runtime
-            <span class="form-description">Maximum capture time (seconds)</span>
+            <span class="form-description">Seconds before timeout</span>
           </label>
-          <input id="maxMillis" type="number" min="10" max="600" step="5" />
+          <input id="maxMillis" type="number" min="10" max="600" step="5">
         </div>
         <div class="form-group">
           <label class="form-label" for="concurrency">
             Concurrency
             <span class="form-description">Parallel downloads</span>
           </label>
-          <input id="concurrency" type="number" min="1" max="32" step="1" />
+          <input id="concurrency" type="number" min="1" max="32" step="1">
         </div>
       </div>
       <div class="input-grid">
@@ -343,19 +68,19 @@
             Max Assets
             <span class="form-description">Maximum files to capture</span>
           </label>
-          <input id="maxAssets" type="number" min="100" max="20000" step="50" />
+          <input id="maxAssets" type="number" min="100" max="50000" step="100">
         </div>
         <div class="form-group">
           <label class="form-label" for="maxZipMB">
             Max ZIP Size
-            <span class="form-description">Maximum file size (MB)</span>
+            <span class="form-description">Maximum size in MB</span>
           </label>
-          <input id="maxZipMB" type="number" min="50" max="4096" step="50" />
+          <input id="maxZipMB" type="number" min="50" max="4096" step="50">
         </div>
       </div>
     </div>
 
-    <!-- Capture Options Section -->
+    <!-- Capture Options -->
     <div class="settings-section">
       <h2 class="section-title">
         <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -366,71 +91,71 @@
       </h2>
       <div class="checkbox-group">
         <div class="checkbox-item">
-          <input id="saveWithoutPrompt" type="checkbox" />
+          <input id="saveWithoutPrompt" type="checkbox">
           <label for="saveWithoutPrompt">
-            Save ZIP without prompt
-            <span class="form-description">Download automatically without filename dialog</span>
+            Auto-save ZIP
+            <span class="form-description">Download without filename dialog</span>
           </label>
         </div>
         <div class="checkbox-item">
-          <input id="showOverlay" type="checkbox" />
+          <input id="showOverlay" type="checkbox">
           <label for="showOverlay">
-            Show in-page progress overlay
-            <span class="form-description">Display capture progress on the page</span>
+            Show progress overlay
+            <span class="form-description">Display capture progress on page</span>
           </label>
         </div>
         <div class="checkbox-item">
-          <input id="skipVideo" type="checkbox" />
+          <input id="skipVideo" type="checkbox">
           <label for="skipVideo">
-            Skip video assets
-            <span class="form-description">Exclude videos to reduce file size (audio allowed)</span>
+            Skip videos
+            <span class="form-description">Exclude video files to reduce size</span>
           </label>
         </div>
         <div class="checkbox-item">
-          <input id="replaceIframesWithPoster" type="checkbox" />
+          <input id="replaceIframesWithPoster" type="checkbox">
           <label for="replaceIframesWithPoster">
-            Replace external videos with thumbnails
-            <span class="form-description">Use poster images for embedded videos/iframes</span>
+            Replace embeds with thumbnails
+            <span class="form-description">Use poster images for YouTube/Vimeo</span>
           </label>
         </div>
       </div>
     </div>
 
-    <!-- Security Section -->
+    <!-- Security -->
     <div class="settings-section">
       <h2 class="section-title">
         <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
           <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
         </svg>
-        Security & Privacy
+        Security
       </h2>
       <div class="checkbox-group">
         <div class="checkbox-item">
-          <input id="stripScripts" type="checkbox" />
+          <input id="stripScripts" type="checkbox">
           <label for="stripScripts">
-            Strip scripts and handlers
+            Strip scripts
             <span class="form-description">Remove JavaScript for offline safety</span>
           </label>
         </div>
         <div class="checkbox-item">
-          <input id="redact" type="checkbox" />
+          <input id="redact" type="checkbox">
           <label for="redact">
-            Redact authenticated text
-            <span class="form-description">Replace sensitive text with placeholders</span>
+            Redact sensitive text
+            <span class="form-description">Replace authenticated content</span>
           </label>
         </div>
         <div class="checkbox-item">
-          <input id="fontFallback" type="checkbox" />
+          <input id="fontFallback" type="checkbox">
           <label for="fontFallback">
-            Enable font fallback
+            Font fallback
             <span class="form-description">Improve offline text rendering</span>
           </label>
         </div>
       </div>
     </div>
 
-    <!-- Denylist Section -->
+    <!-- Blocked Sites -->
     <div class="settings-section">
       <h2 class="section-title">
         <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -440,22 +165,22 @@
         Blocked Sites
       </h2>
       <div class="form-group">
+        <label class="form-label">Quick add:</label>
+        <div class="preset-buttons">
+          <button id="presetSocial" type="button" class="btn-preset">+ Social Media</button>
+          <button id="presetSearch" type="button" class="btn-preset">+ Search Pages</button>
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="denylist">
           URL Patterns
-          <span class="form-description">One regex pattern per line to block sites from crawling</span>
+          <span class="form-description">One regex per line to block from crawling</span>
         </label>
         <textarea id="denylist" placeholder="https?://example\.com/.*"></textarea>
       </div>
-      <div class="form-group">
-        <label class="form-label">Quick Presets</label>
-        <div class="preset-buttons">
-          <button id="presetSocial" type="button" class="btn-preset">Add Social Media</button>
-          <button id="presetSearch" type="button" class="btn-preset">Add Search Pages</button>
-        </div>
-      </div>
     </div>
 
-    <!-- Save Button -->
+    <!-- Save -->
     <div class="button-group">
       <button id="saveBtn" class="btn-save">Save Settings</button>
       <div id="saved" class="success-message">
@@ -463,13 +188,12 @@
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
           <polyline points="22 4 12 14.01 9 11.01"/>
         </svg>
-        Settings saved successfully!
+        Saved!
       </div>
     </div>
   </div>
 
   <script src="browser-polyfill.js"></script>
-  <script src="theme.js"></script>
-  <script type="module" src="options.js"></script>
+  <script src="options.js"></script>
 </body>
 </html>
