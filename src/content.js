@@ -1,26 +1,26 @@
-// Enhanced content script for GetInspire 2.0 with multi-page crawling, animation capture, and asset deduplication
+// Enhanced content script for SnapSite 2.0 with multi-page crawling, animation capture, and asset deduplication
 // Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // CRITICAL: Check if already running BEFORE the async IIFE to prevent race conditions
-if (window.__GETINSPIRE_RUNNING__) {
-  console.log('[GetInspire] Already running, exiting');
-  throw new Error('GetInspire is already running on this page');
+if (window.__SNAPSITE_RUNNING__) {
+  console.log('[SnapSite] Already running, exiting');
+  throw new Error('SnapSite is already running on this page');
 }
-window.__GETINSPIRE_RUNNING__ = true;
+window.__SNAPSITE_RUNNING__ = true;
 
 // Check if this is crawl mode (set by background script before injection)
-const isCrawlMode = window.__GETINSPIRE_CRAWL_MODE__ || false;
-const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
+const isCrawlMode = window.__SNAPSITE_CRAWL_MODE__ || false;
+const crawlBaseDomain = window.__SNAPSITE_CRAWL_DOMAIN__ || null;
 
 (async function() {
-  console.log('[GetInspire] Content script starting...', isCrawlMode ? '(Crawl Mode)' : '(Single Page Mode)');
+  console.log('[SnapSite] Content script starting...', isCrawlMode ? '(Crawl Mode)' : '(Single Page Mode)');
 
   // Check if JSZip is available (not needed in crawl mode as background handles ZIP)
   if (!isCrawlMode && !window.JSZip) {
-    console.error('[GetInspire] JSZip not loaded!');
+    console.error('[SnapSite] JSZip not loaded!');
     alert('Failed to load required libraries. Please try again.');
-    window.__GETINSPIRE_RUNNING__ = false;
+    window.__SNAPSITE_RUNNING__ = false;
     return;
   }
 
@@ -33,7 +33,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Helper function to expand all carousel slides
     async function expandCarousels() {
-      console.log('[GetInspire] Expanding carousel slides...');
+      console.log('[SnapSite] Expanding carousel slides...');
 
       // Common carousel selectors
       const carouselSelectors = [
@@ -95,7 +95,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
           );
 
           if (slides.length > 0) {
-            console.log(`[GetInspire] Found carousel with ${slides.length} slides`);
+            console.log(`[SnapSite] Found carousel with ${slides.length} slides`);
 
             // Make all slides visible for capture
             slides.forEach((slide, index) => {
@@ -173,7 +173,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         if (slides.length > 0) expandedCount++;
       });
 
-      console.log(`[GetInspire] Expanded ${expandedCount} carousels`);
+      console.log(`[SnapSite] Expanded ${expandedCount} carousels`);
       return expandedCount;
     }
 
@@ -194,7 +194,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
       const activeLibs = Object.entries(detected).filter(([k, v]) => v).map(([k]) => k);
       if (activeLibs.length > 0) {
-        console.log('[GetInspire] Detected animation libraries:', activeLibs.join(', '));
+        console.log('[SnapSite] Detected animation libraries:', activeLibs.join(', '));
       }
       return detected;
     }
@@ -238,7 +238,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         }
       }
 
-      console.log(`[GetInspire] Captured ${hoverRules.length} :hover, ${focusRules.length} :focus, ${activeRules.length} :active rules`);
+      console.log(`[SnapSite] Captured ${hoverRules.length} :hover, ${focusRules.length} :focus, ${activeRules.length} :active rules`);
 
       return {
         hover: hoverRules,
@@ -269,10 +269,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
           });
         }
 
-        console.log('[GetInspire] Captured GSAP state');
+        console.log('[SnapSite] Captured GSAP state');
         return state;
       } catch (e) {
-        console.warn('[GetInspire] Failed to capture GSAP state:', e);
+        console.warn('[SnapSite] Failed to capture GSAP state:', e);
         return null;
       }
     }
@@ -287,10 +287,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
           running: window.anime.running ? window.anime.running.length : 0
         };
 
-        console.log('[GetInspire] Captured Anime.js state');
+        console.log('[SnapSite] Captured Anime.js state');
         return state;
       } catch (e) {
-        console.warn('[GetInspire] Failed to capture Anime.js state:', e);
+        console.warn('[SnapSite] Failed to capture Anime.js state:', e);
         return null;
       }
     }
@@ -298,7 +298,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Trigger scroll-based animations by scrolling the page
     // Enhanced for sites with scroll-position image sequences (like wabi.ai)
     async function triggerScrollAnimations() {
-      console.log('[GetInspire] Triggering scroll animations (enhanced)...');
+      console.log('[SnapSite] Triggering scroll animations (enhanced)...');
 
       const scrollHeight = document.documentElement.scrollHeight;
       const viewportHeight = window.innerHeight;
@@ -339,7 +339,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       }
 
       // Do a second slower pass for complex scroll animations
-      console.log('[GetInspire] Second scroll pass for complex animations...');
+      console.log('[SnapSite] Second scroll pass for complex animations...');
       for (let i = scrollSteps; i >= 0; i--) {
         const scrollPos = (scrollHeight - viewportHeight) * (i / scrollSteps);
         window.scrollTo({ top: scrollPos, behavior: 'instant' });
@@ -356,7 +356,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       window.scrollTo({ top: 0, behavior: 'instant' });
       await new Promise(r => setTimeout(r, 300));
 
-      console.log(`[GetInspire] Scroll animation complete. Discovered ${discoveredImages.size} images.`);
+      console.log(`[SnapSite] Scroll animation complete. Discovered ${discoveredImages.size} images.`);
 
       // Force load any lazy images that were discovered
       for (const src of discoveredImages) {
@@ -376,17 +376,17 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Detect and capture scroll-based image sequences (like wabi.ai flipbook animations)
     function detectImageSequences() {
-      console.log('[GetInspire] Detecting image sequences...');
+      console.log('[SnapSite] Detecting image sequences...');
       const sequences = [];
 
       // Look for preloaded images
       const preloadLinks = document.querySelectorAll('link[rel="preload"][as="image"], link[rel="prefetch"][as="image"]');
       const preloadSrcs = Array.from(preloadLinks).map(l => l.href);
-      console.log(`[GetInspire] Found ${preloadSrcs.length} preloaded/prefetched images`);
+      console.log(`[SnapSite] Found ${preloadSrcs.length} preloaded/prefetched images`);
 
       // Log first few for debugging
       if (preloadSrcs.length > 0) {
-        console.log('[GetInspire] Sample preloaded images:', preloadSrcs.slice(0, 5));
+        console.log('[SnapSite] Sample preloaded images:', preloadSrcs.slice(0, 5));
       }
 
       // Also check for images with numbered patterns
@@ -433,13 +433,13 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
             frameCount: frames.length,
             frames: frames.map(f => f.src)
           });
-          console.log(`[GetInspire] Found image sequence: ${shortName} (${frames.length} frames)`);
+          console.log(`[SnapSite] Found image sequence: ${shortName} (${frames.length} frames)`);
         }
       }
 
       // If no sequences found but we have preloaded images, treat them as a single sequence
       if (sequences.length === 0 && preloadSrcs.length >= 3) {
-        console.log('[GetInspire] No numbered sequences found, treating all preloads as animation frames');
+        console.log('[SnapSite] No numbered sequences found, treating all preloads as animation frames');
         sequences.push({
           baseName: 'preloaded-animations',
           frameCount: preloadSrcs.length,
@@ -451,11 +451,11 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       document.querySelectorAll('[data-src*="frame"], [data-src*="sequence"], [data-animation-frames]').forEach(el => {
         const dataSrc = el.dataset.src || el.dataset.animationFrames;
         if (dataSrc) {
-          console.log(`[GetInspire] Found animation data attribute: ${dataSrc.substring(0, 50)}...`);
+          console.log(`[SnapSite] Found animation data attribute: ${dataSrc.substring(0, 50)}...`);
         }
       });
 
-      console.log(`[GetInspire] Total sequences detected: ${sequences.length}`);
+      console.log(`[SnapSite] Total sequences detected: ${sequences.length}`);
       return sequences;
     }
 
@@ -463,7 +463,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     async function preloadImageSequences(sequences) {
       if (!sequences.length) return;
 
-      console.log(`[GetInspire] Preloading ${sequences.length} image sequences...`);
+      console.log(`[SnapSite] Preloading ${sequences.length} image sequences...`);
 
       const preloadPromises = [];
 
@@ -486,7 +486,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       ]);
 
       const loadedCount = results.filter(r => r?.loaded).length;
-      console.log(`[GetInspire] Preloaded ${loadedCount}/${preloadPromises.length} sequence frames`);
+      console.log(`[SnapSite] Preloaded ${loadedCount}/${preloadPromises.length} sequence frames`);
     }
 
     // Capture multiple frames from canvas elements (for animated canvases)
@@ -535,11 +535,11 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
             });
           }
         } catch (e) {
-          console.warn(`[GetInspire] Could not capture canvas ${i}:`, e);
+          console.warn(`[SnapSite] Could not capture canvas ${i}:`, e);
         }
       }
 
-      console.log(`[GetInspire] Captured frames from ${allFrames.length} canvas elements`);
+      console.log(`[SnapSite] Captured frames from ${allFrames.length} canvas elements`);
       return allFrames;
     }
 
@@ -581,7 +581,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         }
       });
 
-      console.log(`[GetInspire] Found ${links.size} same-domain links`);
+      console.log(`[SnapSite] Found ${links.size} same-domain links`);
       return Array.from(links);
     }
 
@@ -643,7 +643,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       });
 
       if (cssInJS.length > 0) {
-        console.log(`[GetInspire] Extracted ${cssInJS.length} CSS-in-JS style blocks`);
+        console.log(`[SnapSite] Extracted ${cssInJS.length} CSS-in-JS style blocks`);
       }
 
       return cssInJS.join('\n\n');
@@ -690,10 +690,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
               dataUrl: posterDataUrl
             });
 
-            console.log(`[GetInspire] Generated poster for video ${i}`);
+            console.log(`[SnapSite] Generated poster for video ${i}`);
           }
         } catch (e) {
-          console.warn(`[GetInspire] Could not generate poster for video ${i}:`, e);
+          console.warn(`[SnapSite] Could not generate poster for video ${i}:`, e);
         }
       }
 
@@ -779,7 +779,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
       } catch (e) {
-        console.warn('[GetInspire] Hash computation failed:', e);
+        console.warn('[SnapSite] Hash computation failed:', e);
         return null;
       }
     }
@@ -824,7 +824,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         const newWidth = Math.round(bitmap.width * ratio);
         const newHeight = Math.round(bitmap.height * ratio);
 
-        console.log(`[GetInspire] Optimizing image: ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}`);
+        console.log(`[SnapSite] Optimizing image: ${bitmap.width}x${bitmap.height} -> ${newWidth}x${newHeight}`);
 
         // Create canvas and resize
         const canvas = new OffscreenCanvas(newWidth, newHeight);
@@ -839,7 +839,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
         return optimizedBlob;
       } catch (e) {
-        console.warn('[GetInspire] Image optimization failed:', e);
+        console.warn('[SnapSite] Image optimization failed:', e);
         return blob;
       }
     }
@@ -1009,10 +1009,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       animationLibraries, gsapState, animeState, interactionStates, canvasFramesData, imageSequences
     );
 
-    console.log('[GetInspire] Animation capture complete:', animationMetadata);
+    console.log('[SnapSite] Animation capture complete:', animationMetadata);
 
     // Wait for JavaScript-rendered content with smart detection
-    console.log('[GetInspire] Waiting for JS-rendered content...');
+    console.log('[SnapSite] Waiting for JS-rendered content...');
 
     // Smart wait: keep checking until SVGs appear or timeout
     let waitAttempts = 0;
@@ -1029,11 +1029,11 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         return inner && inner.length > 10 && (inner.includes('<path') || inner.includes('<use') || inner.includes('<circle') || inner.includes('<polygon'));
       }).length;
 
-      console.log(`[GetInspire] Wait ${waitAttempts}: ${currentSvgCount} SVGs, ${svgsWithContent} with content`);
+      console.log(`[SnapSite] Wait ${waitAttempts}: ${currentSvgCount} SVGs, ${svgsWithContent} with content`);
 
       // If we have SVGs with content and count is stable, we're done
       if (svgsWithContent > 0 && currentSvgCount === lastSvgCount) {
-        console.log('[GetInspire] SVG content detected and stable, proceeding...');
+        console.log('[SnapSite] SVG content detected and stable, proceeding...');
         break;
       }
 
@@ -1059,15 +1059,15 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       inLists: document.querySelectorAll('li svg').length,
       withPaths: document.querySelectorAll('svg path').length
     };
-    console.log('[GetInspire] SVG statistics:', svgStats);
+    console.log('[SnapSite] SVG statistics:', svgStats);
 
     // If still no SVGs with content, log a warning
     if (svgStats.withContent === 0 && svgStats.total > 0) {
-      console.warn('[GetInspire] WARNING: SVGs found but none have content - icons may be missing');
+      console.warn('[SnapSite] WARNING: SVGs found but none have content - icons may be missing');
     }
 
     // Step 2: Collect all assets (COMPREHENSIVE - v2.1 Enhanced)
-    console.log('[GetInspire] Collecting all assets (comprehensive mode)...');
+    console.log('[SnapSite] Collecting all assets (comprehensive mode)...');
 
     const assetsToDownload = new Map(); // url -> {type, element}
     const downloadedAssets = new Map(); // url -> {blob, base64, filename}
@@ -1124,7 +1124,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // ==================== IMAGE COLLECTION (Enhanced v2.1) ====================
-    console.log('[GetInspire] Collecting images...');
+    console.log('[SnapSite] Collecting images...');
 
     // Standard img elements - comprehensive capture
     const images = document.querySelectorAll('img');
@@ -1198,7 +1198,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         }
       }
     });
-    console.log(`[GetInspire] Found ${imgCount} image sources from ${images.length} img elements`);
+    console.log(`[SnapSite] Found ${imgCount} image sources from ${images.length} img elements`);
 
     // Picture elements with multiple sources (Enhanced v2.1)
     const pictures = document.querySelectorAll('picture');
@@ -1242,7 +1242,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         }
       }
     });
-    console.log(`[GetInspire] Found ${pictureSourceCount} picture sources from ${pictures.length} picture elements`);
+    console.log(`[SnapSite] Found ${pictureSourceCount} picture sources from ${pictures.length} picture elements`);
 
     // ==================== MODERN IMAGE FORMATS (AVIF, WebP, JPEG XL) ====================
     // Specifically target modern format images that might be served conditionally
@@ -1254,7 +1254,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== META / OG / TWITTER IMAGES ====================
-    console.log('[GetInspire] Collecting meta images...');
+    console.log('[SnapSite] Collecting meta images...');
 
     const metaImages = document.querySelectorAll(
       'meta[property="og:image"], meta[property="og:image:url"], ' +
@@ -1268,7 +1268,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== FAVICON & ICONS ====================
-    console.log('[GetInspire] Collecting favicons and icons...');
+    console.log('[SnapSite] Collecting favicons and icons...');
 
     const iconLinks = document.querySelectorAll(
       'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], ' +
@@ -1286,7 +1286,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // ==================== PRELOADED ASSETS ====================
-    console.log('[GetInspire] Collecting preloaded assets...');
+    console.log('[SnapSite] Collecting preloaded assets...');
 
     const preloads = document.querySelectorAll(
       'link[rel="preload"], link[rel="prefetch"], link[rel="prerender"]'
@@ -1303,7 +1303,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Add image sequence frames that were detected earlier
     let sequenceFrameCount = 0;
     if (imageSequences && imageSequences.length > 0) {
-      console.log(`[GetInspire] Adding ${imageSequences.length} image sequences to download queue`);
+      console.log(`[SnapSite] Adding ${imageSequences.length} image sequences to download queue`);
       for (const seq of imageSequences) {
         for (const frameSrc of seq.frames) {
           addAsset(frameSrc, 'image', null, { isSequenceFrame: true });
@@ -1311,10 +1311,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         }
       }
     }
-    console.log(`[GetInspire] Added ${sequenceFrameCount} image sequence frames to queue`);
+    console.log(`[SnapSite] Added ${sequenceFrameCount} image sequence frames to queue`);
 
     // ==================== VIDEO COLLECTION (Enhanced) ====================
-    console.log('[GetInspire] Collecting videos...');
+    console.log('[SnapSite] Collecting videos...');
 
     const videos = document.querySelectorAll('video');
     videos.forEach(video => {
@@ -1342,7 +1342,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== AUDIO COLLECTION ====================
-    console.log('[GetInspire] Collecting audio...');
+    console.log('[SnapSite] Collecting audio...');
 
     const audioElements = document.querySelectorAll('audio');
     audioElements.forEach(audio => {
@@ -1353,7 +1353,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== CANVAS CAPTURE (Enhanced) ====================
-    console.log('[GetInspire] Capturing canvas elements...');
+    console.log('[SnapSite] Capturing canvas elements...');
 
     const canvases = document.querySelectorAll('canvas');
     canvases.forEach((canvas, index) => {
@@ -1390,12 +1390,12 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
           height: height
         });
       } catch (e) {
-        console.warn('[GetInspire] Could not capture canvas:', e.message);
+        console.warn('[SnapSite] Could not capture canvas:', e.message);
       }
     });
 
     // ==================== SVG COLLECTION (Enhanced) ====================
-    console.log('[GetInspire] Collecting SVGs...');
+    console.log('[SnapSite] Collecting SVGs...');
 
     // SVG images
     document.querySelectorAll('img[src*=".svg"]').forEach(img => {
@@ -1424,7 +1424,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         inlineSvgCount++;
       }
     });
-    console.log(`[GetInspire] Found ${symbolCount} SVG symbols/defs, ${inlineSvgCount} inline SVGs`);
+    console.log(`[SnapSite] Found ${symbolCount} SVG symbols/defs, ${inlineSvgCount} inline SVGs`);
 
     // External SVG files via object/embed
     document.querySelectorAll('object[data*=".svg"], embed[src*=".svg"], iframe[src*=".svg"]').forEach(obj => {
@@ -1433,7 +1433,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== CSS BACKGROUND & COMPUTED STYLES (Optimized) ====================
-    console.log('[GetInspire] Collecting CSS backgrounds and computed styles...');
+    console.log('[SnapSite] Collecting CSS backgrounds and computed styles...');
 
     // OPTIMIZATION: Only check elements that likely have background images
     // Instead of checking ALL elements, use targeted selectors
@@ -1469,7 +1469,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       } catch (e) {}
     });
 
-    console.log(`[GetInspire] Checking ${elementsToCheck.size} elements for CSS backgrounds...`);
+    console.log(`[SnapSite] Checking ${elementsToCheck.size} elements for CSS backgrounds...`);
 
     // Process in batches to avoid blocking
     const elementArray = Array.from(elementsToCheck);
@@ -1523,7 +1523,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // Check ::before/::after only on elements with content property set
-    console.log('[GetInspire] Checking pseudo-elements...');
+    console.log('[SnapSite] Checking pseudo-elements...');
     document.querySelectorAll('[class*="icon"], [class*="before"], [class*="after"], [class*="bullet"]').forEach(el => {
       ['::before', '::after'].forEach(pseudo => {
         try {
@@ -1545,7 +1545,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== IFRAME SOURCES ====================
-    console.log('[GetInspire] Collecting iframe sources...');
+    console.log('[SnapSite] Collecting iframe sources...');
 
     document.querySelectorAll('iframe[src]').forEach(iframe => {
       const src = iframe.src;
@@ -1566,7 +1566,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // Collect fonts from @font-face rules in stylesheets
-    console.log('[GetInspire] Collecting fonts from @font-face rules...');
+    console.log('[SnapSite] Collecting fonts from @font-face rules...');
     const allStyleSheets = [...document.styleSheets];
     let fontCount = 0;
 
@@ -1590,7 +1590,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
               try {
                 url = new URL(url, baseUrl).href;
               } catch (e) {
-                console.warn(`[GetInspire] Invalid font URL: ${url}`);
+                console.warn(`[SnapSite] Invalid font URL: ${url}`);
                 return;
               }
             }
@@ -1622,7 +1622,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
                     try {
                       url = new URL(url, sheetBaseUrl).href;
                     } catch (e) {
-                      console.warn(`[GetInspire] Invalid font URL: ${url}`);
+                      console.warn(`[SnapSite] Invalid font URL: ${url}`);
                       return;
                     }
                   }
@@ -1638,13 +1638,13 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       } catch (e) {
         // Cross-origin stylesheets will throw - we'll fetch these separately below
         if (sheet.href) {
-          console.log('[GetInspire] Will fetch cross-origin stylesheet for fonts:', sheet.href);
+          console.log('[SnapSite] Will fetch cross-origin stylesheet for fonts:', sheet.href);
         }
       }
     });
 
     // Fetch cross-origin stylesheets to extract font URLs (PARALLEL)
-    console.log('[GetInspire] Fetching external stylesheets for font extraction...');
+    console.log('[SnapSite] Fetching external stylesheets for font extraction...');
     const externalStylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
 
     // Filter to only cross-origin stylesheets we haven't processed
@@ -1689,10 +1689,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       }
     });
 
-    console.log(`[GetInspire] Found ${fontCount} font files`);
+    console.log(`[SnapSite] Found ${fontCount} font files`);
 
     // Collect script files (for reference, will be removed later for offline safety)
-    console.log('[GetInspire] Collecting script files...');
+    console.log('[SnapSite] Collecting script files...');
     document.querySelectorAll('script[src]').forEach(script => {
       if (script.src && !script.src.startsWith('data:')) {
         assetsToDownload.set(script.src, {type: 'script', element: script});
@@ -1702,7 +1702,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // NOTE: Audio and srcset already collected in enhanced section above
 
     // ==================== SHADOW DOM & WEB COMPONENTS (v2.1) ====================
-    console.log('[GetInspire] Collecting Shadow DOM content...');
+    console.log('[SnapSite] Collecting Shadow DOM content...');
     let shadowDomCount = 0;
 
     function collectShadowDomAssets(root) {
@@ -1739,11 +1739,11 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
     collectShadowDomAssets(document);
     if (shadowDomCount > 0) {
-      console.log(`[GetInspire] Found ${shadowDomCount} shadow roots`);
+      console.log(`[SnapSite] Found ${shadowDomCount} shadow roots`);
     }
 
     // ==================== ENHANCED LAZY LOADING (v2.1) ====================
-    console.log('[GetInspire] Triggering enhanced lazy loading...');
+    console.log('[SnapSite] Triggering enhanced lazy loading...');
 
     // Trigger native lazy loading by removing loading="lazy" and forcing load
     document.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]').forEach(el => {
@@ -1768,7 +1768,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     window.scrollTo({ top: 0, behavior: 'instant' });
 
     // ==================== FORM STATE PRESERVATION (v2.1) ====================
-    console.log('[GetInspire] Preserving form element states...');
+    console.log('[SnapSite] Preserving form element states...');
 
     // Preserve input values as attributes for offline viewing
     document.querySelectorAll('input').forEach(input => {
@@ -1821,7 +1821,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== DIALOG & DETAILS STATE (v2.1) ====================
-    console.log('[GetInspire] Preserving dialog and details states...');
+    console.log('[SnapSite] Preserving dialog and details states...');
 
     // Preserve <dialog> open state
     document.querySelectorAll('dialog').forEach(dialog => {
@@ -1858,7 +1858,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== OBJECT/EMBED ELEMENTS (v2.1) ====================
-    console.log('[GetInspire] Handling object and embed elements...');
+    console.log('[SnapSite] Handling object and embed elements...');
 
     // Handle PDFs and other embedded content
     document.querySelectorAll('object[data], embed[src]').forEach(obj => {
@@ -1893,7 +1893,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // ==================== NOSCRIPT CONTENT (v2.1) ====================
     // Since JavaScript won't work offline, show noscript content
-    console.log('[GetInspire] Processing noscript content...');
+    console.log('[SnapSite] Processing noscript content...');
 
     document.querySelectorAll('noscript').forEach(noscript => {
       // Create a visible version of noscript content
@@ -1908,7 +1908,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== CLIP-PATH & MASK SVG REFERENCES (v2.1) ====================
-    console.log('[GetInspire] Collecting clip-path and mask SVG references...');
+    console.log('[SnapSite] Collecting clip-path and mask SVG references...');
 
     document.querySelectorAll('[style*="clip-path"], [style*="mask"]').forEach(el => {
       const style = el.getAttribute('style') || '';
@@ -1958,7 +1958,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== ARIA & ACCESSIBILITY PRESERVATION (v2.1) ====================
-    console.log('[GetInspire] Preserving ARIA states...');
+    console.log('[SnapSite] Preserving ARIA states...');
 
     // Preserve expanded/collapsed states
     document.querySelectorAll('[aria-expanded]').forEach(el => {
@@ -1981,7 +1981,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== PROGRESS/METER/OUTPUT ELEMENTS (v2.1) ====================
-    console.log('[GetInspire] Preserving progress and meter values...');
+    console.log('[SnapSite] Preserving progress and meter values...');
 
     // Progress elements
     document.querySelectorAll('progress').forEach(progress => {
@@ -2008,7 +2008,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== IMAGE MAPS (v2.1) ====================
-    console.log('[GetInspire] Preserving image maps...');
+    console.log('[SnapSite] Preserving image maps...');
 
     document.querySelectorAll('map').forEach(map => {
       map.setAttribute('data-gi-map', 'true');
@@ -2069,7 +2069,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     document.documentElement.setAttribute('data-gi-color-scheme', prefersDark ? 'dark' : 'light');
 
     // ==================== TABLE ENHANCEMENT (v2.1) ====================
-    console.log('[GetInspire] Enhancing table capture...');
+    console.log('[SnapSite] Enhancing table capture...');
 
     document.querySelectorAll('table').forEach(table => {
       // Capture computed styles for sticky headers
@@ -2105,7 +2105,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== CROSS-ORIGIN IFRAME HANDLING (v2.1) ====================
-    console.log('[GetInspire] Handling cross-origin iframes...');
+    console.log('[SnapSite] Handling cross-origin iframes...');
 
     // Tracking/analytics iframe patterns to hide completely (no placeholder)
     const trackingIframePatterns = [
@@ -2141,7 +2141,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         // Check if this is a tracking/analytics iframe - hide completely
         const isTrackingIframe = trackingIframePatterns.some(pattern => pattern.test(src));
         if (isTrackingIframe) {
-          console.log(`[GetInspire] Hiding tracking iframe: ${iframeUrl.hostname}`);
+          console.log(`[SnapSite] Hiding tracking iframe: ${iframeUrl.hostname}`);
           iframe.style.display = 'none';
           iframe.setAttribute('data-gi-tracking-hidden', 'true');
           return; // Don't create placeholder for tracking iframes
@@ -2204,7 +2204,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // ==================== CSS CUSTOM PROPERTIES (v2.1) ====================
-    console.log('[GetInspire] Capturing CSS custom properties...');
+    console.log('[SnapSite] Capturing CSS custom properties...');
 
     // Capture computed CSS custom properties from :root
     const rootStyles = window.getComputedStyle(document.documentElement);
@@ -2225,14 +2225,14 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     if (customProperties.length > 0) {
-      console.log(`[GetInspire] Found ${customProperties.length} CSS custom properties`);
+      console.log(`[SnapSite] Found ${customProperties.length} CSS custom properties`);
     }
 
-    console.log(`[GetInspire] Total assets to download: ${assetsToDownload.size}`);
+    console.log(`[SnapSite] Total assets to download: ${assetsToDownload.size}`);
 
     // Safety check - limit total assets to prevent memory issues
     if (assetsToDownload.size > MAX_ASSETS) {
-      console.warn(`[GetInspire] Too many assets (${assetsToDownload.size}), limiting to ${MAX_ASSETS}`);
+      console.warn(`[SnapSite] Too many assets (${assetsToDownload.size}), limiting to ${MAX_ASSETS}`);
       const limitedAssets = new Map([...assetsToDownload.entries()].slice(0, MAX_ASSETS));
       assetsToDownload.clear();
       limitedAssets.forEach((v, k) => assetsToDownload.set(k, v));
@@ -2341,10 +2341,10 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     const assetEntries = [...assetsToDownload.entries()];
     await downloadWithLimit(assetEntries);
 
-    console.log(`[GetInspire] Downloaded ${successCount}/${assetsToDownload.size} assets (${failCount} failed, ${deduplicatedCount} deduplicated)`);
+    console.log(`[SnapSite] Downloaded ${successCount}/${assetsToDownload.size} assets (${failCount} failed, ${deduplicatedCount} deduplicated)`);
 
     // Step 4: Clone document and replace asset URLs
-    console.log('[GetInspire] Creating modified HTML...');
+    console.log('[SnapSite] Creating modified HTML...');
 
     // First, replace canvas elements with images
     canvases.forEach((canvas, index) => {
@@ -2363,7 +2363,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
 
     // Fix inline SVGs before capturing HTML
-    console.log('[GetInspire] Fixing inline SVGs for offline viewing...');
+    console.log('[SnapSite] Fixing inline SVGs for offline viewing...');
     const allInlineSvgs = document.querySelectorAll('svg');
     let svgFixCount = 0;
     allInlineSvgs.forEach(svg => {
@@ -2412,11 +2412,11 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
             const symbolId = href.substring(1);
             const symbol = document.getElementById(symbolId);
             if (!symbol) {
-              console.warn(`[GetInspire] Missing SVG symbol: ${symbolId}`);
+              console.warn(`[SnapSite] Missing SVG symbol: ${symbolId}`);
               // Try to find it in any SVG sprite container
               const foundSymbol = document.querySelector(`symbol#${symbolId}, svg #${symbolId}`);
               if (foundSymbol) {
-                console.log(`[GetInspire] Found symbol ${symbolId} in sprite container`);
+                console.log(`[SnapSite] Found symbol ${symbolId} in sprite container`);
               }
             }
           }
@@ -2424,17 +2424,17 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
         svgFixCount++;
       } catch (e) {
-        console.warn('[GetInspire] Error fixing SVG:', e);
+        console.warn('[SnapSite] Error fixing SVG:', e);
       }
     });
-    console.log(`[GetInspire] Fixed ${svgFixCount} inline SVGs`);
+    console.log(`[SnapSite] Fixed ${svgFixCount} inline SVGs`);
 
     // Capture DOCTYPE and full HTML
     const doctype = document.doctype
       ? `<!DOCTYPE ${document.doctype.name}${document.doctype.publicId ? ` PUBLIC "${document.doctype.publicId}"` : ''}${document.doctype.systemId ? ` "${document.doctype.systemId}"` : ''}>`
       : '<!DOCTYPE html>';
     const htmlContent = doctype + '\n' + document.documentElement.outerHTML;
-    console.log('[GetInspire] DOCTYPE preserved:', doctype);
+    console.log('[SnapSite] DOCTYPE preserved:', doctype);
 
     // Replace asset URLs with base64 or local paths
     let modifiedHtml = htmlContent;
@@ -2508,12 +2508,12 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         assetMapping[url] = isSmall ? 'embedded' : `assets/${data.filename}`;
       } catch (e) {
         // Skip invalid URLs
-        console.warn('[GetInspire] Skipping invalid URL:', url);
+        console.warn('[SnapSite] Skipping invalid URL:', url);
       }
     }
 
     // Step 5: Get stylesheets and scripts
-    console.log('[GetInspire] Capturing stylesheets...');
+    console.log('[SnapSite] Capturing stylesheets...');
     const styles = [];
 
     // Helper function to extract and preserve CSS @property rules
@@ -2542,7 +2542,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         if (braceCount === 0) {
           const fullProperty = cssText.substring(startIndex, currentIndex);
           propertyRules.push(fullProperty);
-          console.log(`[GetInspire] Extracted @property: ${propertyName}`);
+          console.log(`[SnapSite] Extracted @property: ${propertyName}`);
         }
       }
 
@@ -2576,7 +2576,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         if (braceCount === 0) {
           const fullKeyframe = cssText.substring(startIndex, currentIndex);
           keyframes.push(fullKeyframe);
-          console.log(`[GetInspire] Extracted keyframe: ${name}`);
+          console.log(`[SnapSite] Extracted keyframe: ${name}`);
         }
       }
 
@@ -2890,19 +2890,19 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Get all link stylesheets
     const linkStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
-    console.log(`[GetInspire] Found ${linkStyles.length} linked stylesheets`);
+    console.log(`[SnapSite] Found ${linkStyles.length} linked stylesheets`);
     let stylesheetsLoaded = 0;
     let stylesheetsFailed = 0;
 
     for (const link of linkStyles) {
       try {
-        console.log(`[GetInspire] Fetching stylesheet: ${link.href}`);
+        console.log(`[SnapSite] Fetching stylesheet: ${link.href}`);
         const response = await fetch(link.href);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
         let cssText = await response.text();
-        console.log(`[GetInspire] Loaded stylesheet: ${link.href} (${cssText.length} chars)`);
+        console.log(`[SnapSite] Loaded stylesheet: ${link.href} (${cssText.length} chars)`);
         stylesheetsLoaded++;
 
         // First, resolve all relative URLs in the CSS to absolute URLs based on the stylesheet's location
@@ -2969,23 +2969,23 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
         styles.push(`/* From: ${link.href} */\n${cssText}`);
       } catch (e) {
-        console.error('[GetInspire] FAILED to fetch stylesheet:', link.href, e.message);
+        console.error('[SnapSite] FAILED to fetch stylesheet:', link.href, e.message);
         stylesheetsFailed++;
       }
     }
 
-    console.log(`[GetInspire] Stylesheets: ${stylesheetsLoaded} loaded, ${stylesheetsFailed} failed`);
+    console.log(`[SnapSite] Stylesheets: ${stylesheetsLoaded} loaded, ${stylesheetsFailed} failed`);
     if (stylesheetsFailed > 0) {
-      console.warn(`[GetInspire] WARNING: ${stylesheetsFailed} stylesheet(s) could not be loaded - some styles may be missing`);
+      console.warn(`[SnapSite] WARNING: ${stylesheetsFailed} stylesheet(s) could not be loaded - some styles may be missing`);
     }
 
     // Get all style elements
     const styleElements = Array.from(document.querySelectorAll('style'));
-    console.log(`[GetInspire] Found ${styleElements.length} inline <style> elements`);
+    console.log(`[SnapSite] Found ${styleElements.length} inline <style> elements`);
 
     for (const style of styleElements) {
       let cssText = style.textContent;
-      console.log(`[GetInspire] Processing inline style (${cssText.length} chars)`);
+      console.log(`[SnapSite] Processing inline style (${cssText.length} chars)`);
 
       // Extract and store @property rules, keyframes, and @font-face
       extractCSSProperties(cssText).forEach(rule => allPropertyRules.add(rule));
@@ -3036,7 +3036,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     }
 
     // Capture computed styles for animated elements to preserve animation states
-    console.log('[GetInspire] Capturing computed styles for animated elements...');
+    console.log('[SnapSite] Capturing computed styles for animated elements...');
     const animatedElements = document.querySelectorAll('[class*="animate"], [style*="animation"], [style*="transition"]');
     const computedStylesCSS = [];
 
@@ -3089,25 +3089,25 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Add all collected @property rules at the beginning
     if (allPropertyRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allPropertyRules.size} @property declarations`);
+      console.log(`[SnapSite] Preserved ${allPropertyRules.size} @property declarations`);
       const propertyCSS = `/* CSS @property declarations */\n${[...allPropertyRules].join('\n\n')}\n`;
       styles.unshift(propertyCSS);
     } else {
-      console.log('[GetInspire] No @property declarations found');
+      console.log('[SnapSite] No @property declarations found');
     }
 
     // Add all collected keyframes
     if (allKeyframes.size > 0) {
-      console.log(`[GetInspire] Preserved ${allKeyframes.size} keyframe animations`);
+      console.log(`[SnapSite] Preserved ${allKeyframes.size} keyframe animations`);
       const keyframesCSS = `/* CSS Keyframe animations */\n${[...allKeyframes].join('\n\n')}\n`;
       styles.unshift(keyframesCSS);
     } else {
-      console.log('[GetInspire] No keyframe animations found');
+      console.log('[SnapSite] No keyframe animations found');
     }
 
     // Add all collected @font-face rules (with URL replacement)
     if (allFontFaceRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allFontFaceRules.size} @font-face rules`);
+      console.log(`[SnapSite] Preserved ${allFontFaceRules.size} @font-face rules`);
       let fontFaceCSS = [...allFontFaceRules].join('\n\n');
 
       // Replace font URLs in @font-face rules with downloaded assets
@@ -3142,76 +3142,76 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
       styles.unshift(`/* @font-face rules (icon fonts, web fonts) */\n${fontFaceCSS}\n`);
     } else {
-      console.log('[GetInspire] No @font-face rules found');
+      console.log('[SnapSite] No @font-face rules found');
     }
 
     // Add modern CSS features (v2.1 Enhanced)
     // @container queries (CSS Container Queries)
     if (allContainerRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allContainerRules.size} @container rules`);
+      console.log(`[SnapSite] Preserved ${allContainerRules.size} @container rules`);
       const containerCSS = `/* CSS Container Queries */\n${[...allContainerRules].join('\n\n')}\n`;
       styles.push(containerCSS);
     }
 
     // @layer declarations (CSS Cascade Layers)
     if (allLayerRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allLayerRules.size} @layer rules`);
+      console.log(`[SnapSite] Preserved ${allLayerRules.size} @layer rules`);
       const layerCSS = `/* CSS Cascade Layers */\n${[...allLayerRules].join('\n\n')}\n`;
       styles.unshift(layerCSS); // Layers should be at the beginning
     }
 
     // @supports queries (CSS Feature Queries)
     if (allSupportsRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allSupportsRules.size} @supports rules`);
+      console.log(`[SnapSite] Preserved ${allSupportsRules.size} @supports rules`);
       const supportsCSS = `/* CSS Feature Queries (@supports) */\n${[...allSupportsRules].join('\n\n')}\n`;
       styles.push(supportsCSS);
     }
 
     // @scope rules (CSS Scope)
     if (allScopeRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allScopeRules.size} @scope rules`);
+      console.log(`[SnapSite] Preserved ${allScopeRules.size} @scope rules`);
       const scopeCSS = `/* CSS Scope Rules */\n${[...allScopeRules].join('\n\n')}\n`;
       styles.push(scopeCSS);
     }
 
     // @media print rules
     if (allPrintRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allPrintRules.size} @media print rules`);
+      console.log(`[SnapSite] Preserved ${allPrintRules.size} @media print rules`);
       const printCSS = `/* Print Stylesheet Rules */\n${[...allPrintRules].join('\n\n')}\n`;
       styles.push(printCSS);
     }
 
     // Scroll-driven animations
     if (allScrollTimelines.size > 0) {
-      console.log(`[GetInspire] Preserved ${allScrollTimelines.size} scroll-timeline rules`);
+      console.log(`[SnapSite] Preserved ${allScrollTimelines.size} scroll-timeline rules`);
       const scrollCSS = `/* Scroll-driven Animation Rules */\n${[...allScrollTimelines].join('\n\n')}\n`;
       styles.push(scrollCSS);
     }
 
     // @counter-style rules (custom list markers)
     if (allCounterStyles.size > 0) {
-      console.log(`[GetInspire] Preserved ${allCounterStyles.size} @counter-style rules`);
+      console.log(`[SnapSite] Preserved ${allCounterStyles.size} @counter-style rules`);
       const counterCSS = `/* Custom Counter Styles */\n${[...allCounterStyles].join('\n\n')}\n`;
       styles.unshift(counterCSS); // Should be early in CSS
     }
 
     // @page rules (print page settings)
     if (allPageRules.size > 0) {
-      console.log(`[GetInspire] Preserved ${allPageRules.size} @page rules`);
+      console.log(`[SnapSite] Preserved ${allPageRules.size} @page rules`);
       const pageCSS = `/* Print Page Rules */\n${[...allPageRules].join('\n\n')}\n`;
       styles.push(pageCSS);
     }
 
     // @font-feature-values (OpenType font features)
     if (allFontFeatures.size > 0) {
-      console.log(`[GetInspire] Preserved ${allFontFeatures.size} @font-feature-values rules`);
+      console.log(`[SnapSite] Preserved ${allFontFeatures.size} @font-feature-values rules`);
       const fontFeatureCSS = `/* OpenType Font Feature Values */\n${[...allFontFeatures].join('\n\n')}\n`;
       styles.unshift(fontFeatureCSS); // Should be early with fonts
     }
 
     // Add computed styles for animated elements
     if (computedStylesCSS.length > 0) {
-      console.log(`[GetInspire] Preserved ${computedStylesCSS.length} computed animation states`);
+      console.log(`[SnapSite] Preserved ${computedStylesCSS.length} computed animation states`);
       const computedCSS = `/* Preserved animation states */\n${computedStylesCSS.join('\n')}\n`;
       styles.push(computedCSS);
     }
@@ -3237,7 +3237,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Add carousel visibility and animation enhancement CSS
     const enhancementCSS = `
-      /* GetInspire: Ensure all carousel slides are visible */
+      /* SnapSite: Ensure all carousel slides are visible */
       .carousel-item,
       .slick-slide,
       .swiper-slide,
@@ -3306,7 +3306,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         visibility: visible !important;
       }
 
-      /* GetInspire: Ensure SVG icons are visible */
+      /* SnapSite: Ensure SVG icons are visible */
       svg {
         display: inline-block;
         vertical-align: middle;
@@ -3357,7 +3357,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         opacity: 1 !important;
       }
 
-      /* GetInspire: Enhanced animation and modern CSS feature support */
+      /* SnapSite: Enhanced animation and modern CSS feature support */
 
       /* Ensure gradient animations work */
       @supports (background: linear-gradient(var(--angle, 0deg), red, blue)) {
@@ -3427,7 +3427,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Clean up CSS: remove @font-face rules that reference fonts we couldn't download
     // These would cause CORS errors when opened from file://
-    console.log('[GetInspire] Cleaning up CSS font references...');
+    console.log('[SnapSite] Cleaning up CSS font references...');
 
     // Find all @font-face rules and check if their URLs are embedded or available
     combinedCSS = combinedCSS.replace(/@font-face\s*\{[^}]*\}/gi, (fontFaceRule) => {
@@ -3451,8 +3451,8 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         // Extract font-family name for the comment
         const familyMatch = fontFaceRule.match(/font-family\s*:\s*["']?([^"';]+)["']?/i);
         const fontFamily = familyMatch ? familyMatch[1] : 'unknown';
-        console.log(`[GetInspire] Removing @font-face for "${fontFamily}" - font not available offline`);
-        return `/* GetInspire: @font-face removed - font "${fontFamily}" not available offline */`;
+        console.log(`[SnapSite] Removing @font-face for "${fontFamily}" - font not available offline`);
+        return `/* SnapSite: @font-face removed - font "${fontFamily}" not available offline */`;
       }
 
       return fontFaceRule; // Keep others
@@ -3460,7 +3460,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Also remove any remaining broken url() references in CSS
     combinedCSS = combinedCSS.replace(/url\(["']?(\/[^"')]+\.(woff2?|ttf|otf|eot))["']?\)/gi, (match, path) => {
-      return `url("") /* GetInspire: font not embedded: ${path} */`;
+      return `url("") /* SnapSite: font not embedded: ${path} */`;
     });
 
     // Step 6: Create final HTML with inline carousel script and animation support
@@ -3468,7 +3468,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       <script>
         // Enhanced page restoration with animation support
         document.addEventListener('DOMContentLoaded', function() {
-          console.log('[GetInspire] Initializing captured page with animation support');
+          console.log('[SnapSite] Initializing captured page with animation support');
 
           // Show all carousel slides
           const carouselItems = document.querySelectorAll(
@@ -3515,7 +3515,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
             video.preload = 'metadata';
           });
 
-          console.log('[GetInspire] Page restoration complete');
+          console.log('[SnapSite] Page restoration complete');
         });
       </script>
     `;
@@ -3528,7 +3528,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     // Ensure UTF-8 charset meta tag is present at the very beginning of <head>
     // This prevents encoding issues when the HTML file is opened offline
     // Browsers need charset in the first 1024 bytes to correctly interpret UTF-8 characters
-    console.log('[GetInspire] Ensuring UTF-8 charset declaration...');
+    console.log('[SnapSite] Ensuring UTF-8 charset declaration...');
     // Remove any existing charset meta tags to avoid duplicates
     finalHtml = finalHtml.replace(/<meta\s+charset\s*=\s*["'][^"']*["']\s*\/?>/gi, '');
     finalHtml = finalHtml.replace(/<meta\s+http-equiv\s*=\s*["']Content-Type["'][^>]*charset[^>]*>/gi, '');
@@ -3537,20 +3537,20 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // Remove Content-Security-Policy meta tags that would block inline styles/scripts/fonts
     // These policies are designed for the live site and break offline viewing
-    console.log('[GetInspire] Removing Content-Security-Policy meta tags...');
+    console.log('[SnapSite] Removing Content-Security-Policy meta tags...');
     const cspPattern = /<meta\b[^>]*\bhttp-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>/gi;
     const cspMatches = finalHtml.match(cspPattern) || [];
-    finalHtml = finalHtml.replace(cspPattern, '<!-- GetInspire: CSP meta tag removed for offline compatibility -->');
+    finalHtml = finalHtml.replace(cspPattern, '<!-- SnapSite: CSP meta tag removed for offline compatibility -->');
     if (cspMatches.length > 0) {
-      console.log(`[GetInspire] Removed ${cspMatches.length} CSP meta tag(s)`);
+      console.log(`[SnapSite] Removed ${cspMatches.length} CSP meta tag(s)`);
     }
 
     // Also remove X-Content-Security-Policy (older format)
-    finalHtml = finalHtml.replace(/<meta\b[^>]*\bhttp-equiv\s*=\s*["']X-Content-Security-Policy["'][^>]*>/gi, '<!-- GetInspire: X-CSP removed -->');
+    finalHtml = finalHtml.replace(/<meta\b[^>]*\bhttp-equiv\s*=\s*["']X-Content-Security-Policy["'][^>]*>/gi, '<!-- SnapSite: X-CSP removed -->');
 
     // Replace any remaining absolute URLs with root-relative paths that point to assets folder
     // This handles resources that were downloaded but whose URLs weren't replaced earlier
-    console.log('[GetInspire] Converting remaining root-relative URLs to local paths...');
+    console.log('[SnapSite] Converting remaining root-relative URLs to local paths...');
 
     // For fonts specifically - replace /path/to/font.woff2 with assets/font.woff2
     finalHtml = finalHtml.replace(/url\(["']?(\/[^"')]+\.(woff2?|ttf|otf|eot))["']?\)/gi, (match, path) => {
@@ -3562,12 +3562,12 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         return `url("${fontData.base64}")`;
       }
       // If not downloaded, comment it out to prevent errors
-      return `url("") /* GetInspire: font not available offline: ${path} */`;
+      return `url("") /* SnapSite: font not available offline: ${path} */`;
     });
 
     // For images/SVGs with any path pattern (root-relative, relative, or absolute)
     // This is a second pass to catch anything missed in the first pass
-    console.log('[GetInspire] Second pass: replacing remaining image URLs...');
+    console.log('[SnapSite] Second pass: replacing remaining image URLs...');
     let secondPassReplacements = 0;
 
     // Helper to find asset in downloaded assets by various URL patterns
@@ -3612,21 +3612,21 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       return match;
     });
 
-    console.log(`[GetInspire] Second pass replaced ${secondPassReplacements} image URLs`);
+    console.log(`[SnapSite] Second pass replaced ${secondPassReplacements} image URLs`);
 
     // Remove original <link rel="stylesheet"> tags since CSS is now inlined
     // This prevents the browser from trying to load external CSS files that don't exist offline
-    console.log('[GetInspire] Removing external stylesheet links (CSS is inlined)...');
+    console.log('[SnapSite] Removing external stylesheet links (CSS is inlined)...');
     const linkTagsRemoved = (finalHtml.match(/<link[^>]*rel=["']stylesheet["'][^>]*>/gi) || []).length;
-    finalHtml = finalHtml.replace(/<link[^>]*rel=["']stylesheet["'][^>]*>/gi, '<!-- GetInspire: stylesheet inlined -->');
-    console.log(`[GetInspire] Removed ${linkTagsRemoved} external stylesheet link tags`);
+    finalHtml = finalHtml.replace(/<link[^>]*rel=["']stylesheet["'][^>]*>/gi, '<!-- SnapSite: stylesheet inlined -->');
+    console.log(`[SnapSite] Removed ${linkTagsRemoved} external stylesheet link tags`);
 
     // Also remove preload links for stylesheets
-    finalHtml = finalHtml.replace(/<link[^>]*rel=["']preload["'][^>]*as=["']style["'][^>]*>/gi, '<!-- GetInspire: preload removed -->');
+    finalHtml = finalHtml.replace(/<link[^>]*rel=["']preload["'][^>]*as=["']style["'][^>]*>/gi, '<!-- SnapSite: preload removed -->');
 
     // Clean up stray HTML comment endings that can appear as visible text
     // These come from IE conditional comments or malformed HTML in the original page
-    console.log('[GetInspire] Cleaning up stray comment markers...');
+    console.log('[SnapSite] Cleaning up stray comment markers...');
 
     // Remove --> that appear as text content (not inside proper comments)
     // Pattern: --> not preceded by <!-- (with possible content between)
@@ -3652,7 +3652,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // SCRIPTS PRESERVED - No removal (user requested local viewing without security restrictions)
     // Scripts are kept as-is, URLs updated to local paths where downloaded
-    console.log('[GetInspire] Keeping all scripts (security restrictions disabled)...');
+    console.log('[SnapSite] Keeping all scripts (security restrictions disabled)...');
 
     // Update script src URLs to local paths if we downloaded them
     for (const [url, data] of downloadedAssets) {
@@ -3673,7 +3673,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // ==================== CRAWL MODE BRANCH (v2.0) ====================
     if (isCrawlMode) {
-      console.log('[GetInspire] Crawl mode: Sending page data to background...');
+      console.log('[SnapSite] Crawl mode: Sending page data to background...');
 
       // Extract links for crawl
       const links = extractSameDomainLinks(crawlBaseDomain);
@@ -3694,15 +3694,15 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         status: `Page captured, found ${links.length} links`
       });
 
-      console.log('[GetInspire] Crawl mode: Page captured, found', links.length, 'links');
+      console.log('[SnapSite] Crawl mode: Page captured, found', links.length, 'links');
 
       // Skip ZIP generation - background will handle it
-      window.__GETINSPIRE_RUNNING__ = false;
+      window.__SNAPSITE_RUNNING__ = false;
       return;
     }
 
     // Step 7: Create ZIP file (single-page mode only)
-    console.log('[GetInspire] Creating ZIP file...');
+    console.log('[SnapSite] Creating ZIP file...');
     const zip = new JSZip();
 
     // Add HTML file
@@ -3724,7 +3724,7 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 URL: ${window.location.href}
 Title: ${document.title}
 Captured: ${new Date().toISOString()}
-GetInspire Version: 2.1.0
+SnapSite Version: 2.1.0
 
 ## Statistics
 - Total assets found: ${assetsToDownload.size}
@@ -3791,7 +3791,7 @@ GetInspire Version: 2.1.0
     zip.file('README.md', readme);
 
     // Step 8: Generate and download ZIP
-    console.log('[GetInspire] Generating ZIP...');
+    console.log('[SnapSite] Generating ZIP...');
     browserAPI.runtime.sendMessage({
       type: 'CAPTURE_STATUS',
       status: 'Generating ZIP file...'
@@ -3803,10 +3803,10 @@ GetInspire Version: 2.1.0
       compressionOptions: { level: 6 }
     }, (metadata) => {
       const percent = Math.round(metadata.percent);
-      console.log(`[GetInspire] ZIP generation: ${percent}%`);
+      console.log(`[SnapSite] ZIP generation: ${percent}%`);
     });
 
-    console.log('[GetInspire] Initiating download...');
+    console.log('[SnapSite] Initiating download...');
     const url = URL.createObjectURL(zipBlob);
     const hostname = window.location.hostname.replace(/[^a-z0-9]/gi, '-');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
@@ -3834,11 +3834,11 @@ GetInspire Version: 2.1.0
       type: 'CAPTURE_COMPLETE'
     });
 
-    console.log('[GetInspire] Capture completed successfully!');
-    console.log('[GetInspire] File saved as:', filename);
+    console.log('[SnapSite] Capture completed successfully!');
+    console.log('[SnapSite] File saved as:', filename);
 
   } catch (error) {
-    console.error('[GetInspire] Capture failed:', error);
+    console.error('[SnapSite] Capture failed:', error);
     browserAPI.runtime.sendMessage({
       type: 'CAPTURE_ERROR',
       error: error.message
@@ -3848,7 +3848,7 @@ GetInspire Version: 2.1.0
     }
   } finally {
     // Clean up
-    window.__GETINSPIRE_RUNNING__ = false;
+    window.__SNAPSITE_RUNNING__ = false;
   }
 })();
 

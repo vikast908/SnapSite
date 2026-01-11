@@ -1,6 +1,6 @@
-// Options page for GetInspire
+// Options page for SnapSite
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-console.log('[GetInspire Options] Initializing');
+console.log('[SnapSite Options] Initializing');
 
 // Defaults
 const defaults = {
@@ -60,7 +60,7 @@ function setTheme(theme) {
   currentTheme = theme;
   document.documentElement.setAttribute('data-theme', theme);
   updateThemeUI(theme);
-  browserAPI.storage.sync.set({ getinspireTheme: theme });
+  browserAPI.storage.sync.set({ snapsiteTheme: theme });
 }
 
 function toggleTheme() {
@@ -68,8 +68,8 @@ function toggleTheme() {
 }
 
 // Initialize theme
-browserAPI.storage.sync.get(['getinspireTheme'], (result) => {
-  currentTheme = result.getinspireTheme === 'dark' ? 'dark' : 'light';
+browserAPI.storage.sync.get(['snapsiteTheme'], (result) => {
+  currentTheme = result.snapsiteTheme === 'dark' ? 'dark' : 'light';
   updateThemeUI(currentTheme);
 });
 
@@ -79,8 +79,8 @@ if (els.themeToggle) {
 
 // Load settings
 function loadSettings() {
-  browserAPI.storage.sync.get(['getinspireOptions'], (result) => {
-    const opts = result.getinspireOptions || {};
+  browserAPI.storage.sync.get(['snapsiteOptions'], (result) => {
+    const opts = result.snapsiteOptions || {};
 
     // Number inputs (convert ms to seconds for display)
     if (els.maxMillis) els.maxMillis.value = Math.floor((opts.maxMillis ?? defaults.maxMillis) / 1000);
@@ -101,7 +101,7 @@ function loadSettings() {
     const denylist = opts.denylist ?? defaults.denylist;
     if (els.denylist) els.denylist.value = Array.isArray(denylist) ? denylist.join('\n') : '';
 
-    console.log('[GetInspire Options] Loaded');
+    console.log('[SnapSite Options] Loaded');
   });
 }
 
@@ -132,8 +132,8 @@ function saveSettings() {
     denylist: denylistLines
   };
 
-  browserAPI.storage.sync.set({ getinspireOptions: options }, () => {
-    console.log('[GetInspire Options] Saved');
+  browserAPI.storage.sync.set({ snapsiteOptions: options }, () => {
+    console.log('[SnapSite Options] Saved');
     if (els.saved) {
       els.saved.classList.add('show');
       setTimeout(() => els.saved.classList.remove('show'), 2000);

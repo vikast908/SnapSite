@@ -6,8 +6,8 @@
     // Apply theme immediately before CSS loads
     (function() {
       const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-      browserAPI.storage.sync.get(['getinspireTheme'], function(result) {
-        document.documentElement.setAttribute('data-theme', result.getinspireTheme === 'dark' ? 'dark' : 'light');
+      browserAPI.storage.sync.get(['snapsiteTheme'], function(result) {
+        document.documentElement.setAttribute('data-theme', result.snapsiteTheme === 'dark' ? 'dark' : 'light');
       });
     })();
   </script>
@@ -23,7 +23,7 @@
         <path d="M9.5 19.5h5M10 22h4"/>
         <path d="M12 8c2.8 0 4.8 1 4.8 1s-1.3 5.2-5.3 5.2c-1.1 0-1.9-.3-2.5-.8 0-3.2 1.4-5.4 3-5.4z" fill="currentColor" stroke="none"/>
       </svg>
-      <span class="brand-name">GetInspire</span>
+      <span class="brand-name">SnapSite</span>
     </div>
     <a href="#" id="openOptionsLink" class="icon-btn" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

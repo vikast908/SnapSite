@@ -13,7 +13,7 @@
   const isBrowserExtension = typeof chrome !== 'undefined' || typeof browser !== 'undefined';
 
   if (!isBrowserExtension) {
-    console.warn('[GetInspire] Not running in browser extension context');
+    console.warn('[SnapSite] Not running in browser extension context');
     return;
   }
 
@@ -166,7 +166,7 @@
       globalThis.browser.browserAction = globalThis.browser.action;
     }
 
-    console.log('[GetInspire] Browser polyfill loaded (Chrome-based browser)');
+    console.log('[SnapSite] Browser polyfill loaded (Chrome-based browser)');
   }
 })();
 

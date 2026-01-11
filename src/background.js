@@ -1,7 +1,7 @@
-// GetInspire 2.0 Background Script with Multi-Page Crawling Support
+// SnapSite 2.0 Background Script with Multi-Page Crawling Support
 // Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-console.log('[GetInspire BG] Background script loaded (v2.0)');
+console.log('[SnapSite BG] Background script loaded (v2.0)');
 
 // Track which tabs are currently capturing to prevent duplicate injections
 const capturingTabs = new Set();
@@ -39,7 +39,7 @@ function resetCrawlState() {
 // ==================== MESSAGE HANDLING ====================
 
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[GetInspire BG] Received message:', message.type);
+  console.log('[SnapSite BG] Received message:', message.type);
 
   switch (message.type) {
     case 'START_CAPTURE':
@@ -83,7 +83,7 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
 
     default:
-      console.log('[GetInspire BG] Unknown message type:', message.type);
+      console.log('[SnapSite BG] Unknown message type:', message.type);
   }
 
   return false;
@@ -92,11 +92,11 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ==================== SINGLE PAGE CAPTURE ====================
 
 async function handleStartCapture(tabId, sendResponse) {
-  console.log('[GetInspire BG] Starting single-page capture for tab:', tabId);
+  console.log('[SnapSite BG] Starting single-page capture for tab:', tabId);
 
   // Check if this tab is already capturing
   if (capturingTabs.has(tabId)) {
-    console.warn('[GetInspire BG] Capture already in progress for tab:', tabId);
+    console.warn('[SnapSite BG] Capture already in progress for tab:', tabId);
     sendResponse({ success: false, error: 'Capture already in progress for this tab' });
     return;
   }
@@ -107,7 +107,7 @@ async function handleStartCapture(tabId, sendResponse) {
   // Set a timeout to automatically clear this tab after 5 minutes
   setTimeout(() => {
     if (capturingTabs.has(tabId)) {
-      console.warn('[GetInspire BG] Capture timeout for tab:', tabId, '- clearing...');
+      console.warn('[SnapSite BG] Capture timeout for tab:', tabId, '- clearing...');
       capturingTabs.delete(tabId);
     }
   }, 5 * 60 * 1000);
@@ -118,7 +118,7 @@ async function handleStartCapture(tabId, sendResponse) {
       target: { tabId: tabId },
       files: ['src/vendor/jszip.min.js']
     });
-    console.log('[GetInspire BG] JSZip injected successfully');
+    console.log('[SnapSite BG] JSZip injected successfully');
 
     // Small delay to ensure JSZip is fully loaded
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -135,10 +135,10 @@ async function handleStartCapture(tabId, sendResponse) {
       files: ['src/content.js']
     });
 
-    console.log('[GetInspire BG] Content scripts injected successfully');
+    console.log('[SnapSite BG] Content scripts injected successfully');
     sendResponse({ success: true });
   } catch (error) {
-    console.error('[GetInspire BG] Failed to inject scripts:', error);
+    console.error('[SnapSite BG] Failed to inject scripts:', error);
     capturingTabs.delete(tabId);
     sendResponse({ success: false, error: error.message });
 
@@ -152,7 +152,7 @@ async function handleStartCapture(tabId, sendResponse) {
 // ==================== FETCH ASSET (Background has more permissions) ====================
 
 async function handleFetchAsset(url, sendResponse) {
-  console.log('[GetInspire BG] Fetching asset:', url.substring(0, 60) + '...');
+  console.log('[SnapSite BG] Fetching asset:', url.substring(0, 60) + '...');
 
   try {
     const response = await fetch(url, {
@@ -177,7 +177,7 @@ async function handleFetchAsset(url, sendResponse) {
       size: blob.size
     });
   } catch (error) {
-    console.warn('[GetInspire BG] Failed to fetch asset:', error.message);
+    console.warn('[SnapSite BG] Failed to fetch asset:', error.message);
     sendResponse({ success: false, error: error.message });
   }
 }
@@ -185,7 +185,7 @@ async function handleFetchAsset(url, sendResponse) {
 // ==================== MULTI-PAGE CRAWL (v2.0) ====================
 
 async function handleStartCrawl(tabId, options, sendResponse) {
-  console.log('[GetInspire BG] Starting crawl for tab:', tabId, 'options:', options);
+  console.log('[SnapSite BG] Starting crawl for tab:', tabId, 'options:', options);
 
   if (crawlState.isRunning) {
     sendResponse({ success: false, error: 'Crawl already in progress' });
@@ -211,7 +211,7 @@ async function handleStartCrawl(tabId, options, sendResponse) {
     const normalizedStart = normalizeUrl(startUrl);
     crawlState.queue.push(normalizedStart);
 
-    console.log('[GetInspire BG] Crawl initialized:', {
+    console.log('[SnapSite BG] Crawl initialized:', {
       baseDomain: crawlState.baseDomain,
       maxPages: crawlState.maxPages,
       startUrl: normalizedStart
@@ -223,14 +223,14 @@ async function handleStartCrawl(tabId, options, sendResponse) {
     await processNextPage();
 
   } catch (error) {
-    console.error('[GetInspire BG] Failed to start crawl:', error);
+    console.error('[SnapSite BG] Failed to start crawl:', error);
     resetCrawlState();
     sendResponse({ success: false, error: error.message });
   }
 }
 
 function handleStopCrawl(sendResponse) {
-  console.log('[GetInspire BG] Stopping crawl...');
+  console.log('[SnapSite BG] Stopping crawl...');
 
   if (crawlState.isRunning) {
     crawlState.isRunning = false;
@@ -252,13 +252,13 @@ function handleStopCrawl(sendResponse) {
 
 async function processNextPage() {
   if (!crawlState.isRunning) {
-    console.log('[GetInspire BG] Crawl stopped');
+    console.log('[SnapSite BG] Crawl stopped');
     return;
   }
 
   // Check if we've reached the max pages
   if (crawlState.pageCount >= crawlState.maxPages) {
-    console.log('[GetInspire BG] Reached max pages limit:', crawlState.maxPages);
+    console.log('[SnapSite BG] Reached max pages limit:', crawlState.maxPages);
     await finishCrawl();
     return;
   }
@@ -273,7 +273,7 @@ async function processNextPage() {
   }
 
   if (!nextUrl) {
-    console.log('[GetInspire BG] No more URLs to crawl');
+    console.log('[SnapSite BG] No more URLs to crawl');
     await finishCrawl();
     return;
   }
@@ -282,7 +282,7 @@ async function processNextPage() {
   crawlState.visited.add(nextUrl);
   crawlState.pageCount++;
 
-  console.log(`[GetInspire BG] Crawling page ${crawlState.pageCount}/${crawlState.maxPages}: ${nextUrl}`);
+  console.log(`[SnapSite BG] Crawling page ${crawlState.pageCount}/${crawlState.maxPages}: ${nextUrl}`);
 
   // Update popup with progress
   browserAPI.runtime.sendMessage({
@@ -306,7 +306,7 @@ async function processNextPage() {
     await injectCrawlScripts(crawlState.currentTabId, crawlState.baseDomain);
 
   } catch (error) {
-    console.error('[GetInspire BG] Error processing page:', nextUrl, error);
+    console.error('[SnapSite BG] Error processing page:', nextUrl, error);
 
     // Continue to next page on error
     await new Promise(r => setTimeout(r, 500));
@@ -343,8 +343,8 @@ async function injectCrawlScripts(tabId, baseDomain) {
     await browserAPI.scripting.executeScript({
       target: { tabId: tabId },
       func: (domain) => {
-        window.__GETINSPIRE_CRAWL_MODE__ = true;
-        window.__GETINSPIRE_CRAWL_DOMAIN__ = domain;
+        window.__SNAPSITE_CRAWL_MODE__ = true;
+        window.__SNAPSITE_CRAWL_DOMAIN__ = domain;
       },
       args: [baseDomain]
     });
@@ -369,9 +369,9 @@ async function injectCrawlScripts(tabId, baseDomain) {
       files: ['src/content.js']
     });
 
-    console.log('[GetInspire BG] Crawl scripts injected for tab:', tabId);
+    console.log('[SnapSite BG] Crawl scripts injected for tab:', tabId);
   } catch (error) {
-    console.error('[GetInspire BG] Failed to inject crawl scripts:', error);
+    console.error('[SnapSite BG] Failed to inject crawl scripts:', error);
     throw error;
   }
 }
@@ -379,7 +379,7 @@ async function injectCrawlScripts(tabId, baseDomain) {
 function handlePageCaptured(pageData, links, sender) {
   if (!crawlState.isRunning) return;
 
-  console.log('[GetInspire BG] Page captured:', pageData.url, 'with', links?.length || 0, 'links');
+  console.log('[SnapSite BG] Page captured:', pageData.url, 'with', links?.length || 0, 'links');
 
   // Store page data
   crawlState.pages.push({
@@ -406,7 +406,7 @@ function handlePageCaptured(pageData, links, sender) {
     }
   }
 
-  console.log('[GetInspire BG] Queue size:', crawlState.queue.length, 'Visited:', crawlState.visited.size);
+  console.log('[SnapSite BG] Queue size:', crawlState.queue.length, 'Visited:', crawlState.visited.size);
 
   // Process next page
   setTimeout(() => processNextPage(), 100);
@@ -431,7 +431,7 @@ function handleAssetCheck(hash, sendResponse) {
 }
 
 async function finishCrawl() {
-  console.log('[GetInspire BG] Finishing crawl with', crawlState.pages.length, 'pages');
+  console.log('[SnapSite BG] Finishing crawl with', crawlState.pages.length, 'pages');
 
   crawlState.isRunning = false;
 
@@ -450,7 +450,7 @@ async function finishCrawl() {
 }
 
 async function generateCrawlZip() {
-  console.log('[GetInspire BG] Generating crawl ZIP...');
+  console.log('[SnapSite BG] Generating crawl ZIP...');
 
   browserAPI.runtime.sendMessage({
     type: 'CAPTURE_STATUS',
@@ -498,7 +498,7 @@ async function generateCrawlZip() {
 
     indexHtml += `  </ul>
   <div class="meta">
-    <p>Generated by GetInspire 2.0</p>
+    <p>Generated by SnapSite 2.0</p>
     <p>Crawl duration: ${Math.round((Date.now() - crawlState.startTime) / 1000)}s</p>
   </div>
 </body>
@@ -513,7 +513,7 @@ async function generateCrawlZip() {
       func: async (pagesData, indexContent, zipFilename) => {
         // Create ZIP using JSZip (should already be loaded)
         if (!window.JSZip) {
-          console.error('[GetInspire] JSZip not available for ZIP generation');
+          console.error('[SnapSite] JSZip not available for ZIP generation');
           return;
         }
 
@@ -537,7 +537,7 @@ Captured: ${new Date().toISOString()}
 ## Pages Captured
 ${pagesData.map((p, i) => `${i + 1}. ${p.title || 'Untitled'} - ${p.url}`).join('\n')}
 
-Generated by GetInspire 2.0
+Generated by SnapSite 2.0
 `;
         zip.file('README.md', readme);
 
@@ -557,15 +557,15 @@ Generated by GetInspire 2.0
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-        console.log('[GetInspire] Crawl ZIP downloaded:', zipFilename);
+        console.log('[SnapSite] Crawl ZIP downloaded:', zipFilename);
       },
       args: [pages, indexHtml, filename]
     });
 
-    console.log('[GetInspire BG] Crawl ZIP generation initiated');
+    console.log('[SnapSite BG] Crawl ZIP generation initiated');
 
   } catch (error) {
-    console.error('[GetInspire BG] Failed to generate crawl ZIP:', error);
+    console.error('[SnapSite BG] Failed to generate crawl ZIP:', error);
     browserAPI.runtime.sendMessage({
       type: 'CAPTURE_ERROR',
       error: 'Failed to generate ZIP: ' + error.message
@@ -598,7 +598,7 @@ function normalizeUrl(url) {
 // ==================== DOWNLOAD HANDLING ====================
 
 async function handleDownloadZip(data) {
-  console.log('[GetInspire BG] Downloading ZIP file');
+  console.log('[SnapSite BG] Downloading ZIP file');
 
   try {
     const blob = new Blob([data.zipData], { type: 'application/zip' });
@@ -613,7 +613,7 @@ async function handleDownloadZip(data) {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     browserAPI.runtime.sendMessage({ type: 'DOWNLOAD_SUCCESS' }).catch(() => {});
   } catch (error) {
-    console.error('[GetInspire BG] Download failed:', error);
+    console.error('[SnapSite BG] Download failed:', error);
     browserAPI.runtime.sendMessage({
       type: 'DOWNLOAD_ERROR',
       error: error.message
@@ -631,7 +631,7 @@ setInterval(() => {
     const usagePercent = Math.round((usedHeapSize / totalHeapSize) * 100);
 
     if (usagePercent > 80) {
-      console.warn('[GetInspire BG] High memory usage:', usagePercent + '%');
+      console.warn('[SnapSite BG] High memory usage:', usagePercent + '%');
       browserAPI.runtime.sendMessage({
         type: 'MEMORY_WARNING',
         percent: usagePercent

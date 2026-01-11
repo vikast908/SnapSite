@@ -1,14 +1,14 @@
-# Privacy Policy for GetInspire
+# Privacy Policy for SnapSite
 
 **Last Updated:** January 11, 2026
 
 ## Overview
 
-GetInspire is a cross-browser extension that saves web pages and entire websites as offline ZIP files. It works on Chrome, Firefox, Edge, Safari, Opera, and Brave. This privacy policy explains how the extension handles your data.
+SnapSite is a cross-browser extension that saves web pages and entire websites as offline ZIP files. It works on Chrome, Firefox, Edge, Safari, Opera, and Brave. This privacy policy explains how the extension handles your data.
 
 ## Data Collection
 
-**GetInspire does not collect, transmit, or store any personal data.** All processing happens entirely on your local device.
+**SnapSite does not collect, transmit, or store any personal data.** All processing happens entirely on your local device.
 
 ### What We Don't Collect
 - No personal information
@@ -25,7 +25,7 @@ The extension stores your preferences (theme, capture settings, etc.) locally in
 
 ## Permissions Explained
 
-GetInspire requests the following permissions solely to provide its core functionality:
+SnapSite requests the following permissions solely to provide its core functionality:
 
 | Permission | Purpose |
 |------------|---------|
@@ -46,7 +46,7 @@ GetInspire requests the following permissions solely to provide its core functio
 
 ## Automatic Filtering
 
-GetInspire automatically skips downloading certain third-party scripts during capture:
+SnapSite automatically skips downloading certain third-party scripts during capture:
 - Analytics (Google Analytics, Mixpanel, Segment, etc.)
 - Tracking pixels (Facebook, Hotjar, FullStory, etc.)
 - Chat widgets (Intercom, Drift, Zendesk, etc.)
@@ -56,7 +56,7 @@ This filtering is done locally and improves capture speed while ensuring offline
 
 ## Third-Party Services
 
-GetInspire does not use any third-party services, analytics, or tracking tools.
+SnapSite does not use any third-party services, analytics, or tracking tools.
 
 ## Cross-Browser Support
 
@@ -68,7 +68,7 @@ Since all data processing occurs locally on your device and no data is transmitt
 
 ## Children's Privacy
 
-GetInspire does not knowingly collect any information from children under 13 years of age.
+SnapSite does not knowingly collect any information from children under 13 years of age.
 
 ## Changes to This Policy
 
@@ -77,9 +77,9 @@ We may update this privacy policy from time to time. Any changes will be reflect
 ## Contact
 
 If you have questions about this privacy policy, please open an issue at:
-https://github.com/vikast908/GetInspire/issues
+https://github.com/vikast908/SnapSite/issues
 
 ## Open Source
 
-GetInspire is open source software. You can review the complete source code at:
-https://github.com/vikast908/GetInspire
+SnapSite is open source software. You can review the complete source code at:
+https://github.com/vikast908/SnapSite

@@ -1,4 +1,4 @@
-# GetInspire v2.1 - Cross-Browser Extension (MV3)
+# SnapSite v2.1 - Cross-Browser Extension (MV3)
 
 **The most comprehensive web page capture tool.** Snapshot any page with pixel-perfect accuracy or crawl entire sites into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, forms, tables, and more.
 
@@ -140,30 +140,30 @@
 ### Chrome / Edge / Opera / Brave
 1. Download or clone this repository
 2. Open `chrome://extensions` (or equivalent), enable Developer mode
-3. Click "Load unpacked" and select the `GetInspire/` folder
-4. Pin GetInspire in the toolbar
+3. Click "Load unpacked" and select the `SnapSite/` folder
+4. Pin SnapSite in the toolbar
 
 ### Firefox
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click "Load Temporary Add-on"
-3. Select the `manifest.json` file from the `GetInspire/` folder
+3. Select the `manifest.json` file from the `SnapSite/` folder
 
 ### Safari (macOS)
 1. Enable "Allow unsigned extensions" in Safari's Develop menu
 2. Open Safari > Settings > Extensions
-3. Enable GetInspire
+3. Enable SnapSite
 
 ## Use
 
 ### Single Page Capture
 - Open a normal, finite page (blog, docs, landing page)
-- Click the GetInspire icon and select **"Single Page"**
+- Click the SnapSite icon and select **"Single Page"**
 - Click **Start capture** and save the ZIP
 - Unzip and open `index.html` - works completely offline with no console errors
 
 ### Multi-Page Site Crawl
 - Open any page on the site you want to capture
-- Click the GetInspire icon and select **"Crawl Site"**
+- Click the SnapSite icon and select **"Crawl Site"**
 - Set the max pages limit (default: 10)
 - Click **Start capture** to begin crawling
 - Progress shows "X/Y pages" as the crawl proceeds
@@ -202,7 +202,7 @@ site-capture.zip
 
 ## Offline Compatibility
 
-GetInspire creates truly offline-ready captures with zero console errors:
+SnapSite creates truly offline-ready captures with zero console errors:
 
 ### Automatic Filtering (v2.1)
 The following script types are automatically skipped during capture:
@@ -245,7 +245,7 @@ When you open a captured page from `file://`, browsers enforce strict security:
 - CSP policies block inline styles
 - Relative paths resolve incorrectly
 
-GetInspire handles all of this automatically so your captured pages just work.
+SnapSite handles all of this automatically so your captured pages just work.
 
 ## Animation & Modern CSS Support
 - **CSS Keyframe Animations**: All `@keyframes` rules are extracted and preserved
@@ -264,7 +264,7 @@ GetInspire handles all of this automatically so your captured pages just work.
 - **Scroll Animations**: @scroll-timeline and animation-timeline support
 
 ### Animation Library Detection
-GetInspire detects and notes the presence of:
+SnapSite detects and notes the presence of:
 - **GSAP / TweenMax / TweenLite**: Animation library states captured
 - **Anime.js**: Animation states preserved
 - **Framer Motion**: React animation data captured

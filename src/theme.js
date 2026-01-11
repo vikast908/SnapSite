@@ -1,9 +1,9 @@
 // Lightweight theme manager for extension pages (popup/options/setup)
-// Exposes window.getInspireTheme with get/set/cycle helpers and applies on load.
+// Exposes window.snapsiteTheme with get/set/cycle helpers and applies on load.
 (function(){
   // Cross-browser compatibility
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-  const KEY = 'getinspireTheme'; // 'light' | 'dark'
+  const KEY = 'snapsiteTheme'; // 'light' | 'dark'
   let current = 'light';
 
   function effective(mode){
@@ -85,7 +85,7 @@
   }
 
   // Expose API for pages to use
-  window.getInspireTheme = {
+  window.snapsiteTheme = {
     get,
     set,
     cycle,

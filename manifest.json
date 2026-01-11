@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "GetInspire",
+  "name": "SnapSite",
   "version": "2.1.0",
   "description": "Save web pages and entire sites as offline ZIP files. Works on Chrome, Firefox, Edge, Safari, Opera, and Brave.",
 
@@ -23,7 +23,7 @@
 
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "GetInspire - Save pages offline",
+    "default_title": "SnapSite - Save pages offline",
     "default_icon": {
       "16": "assets/icons/16.png",
       "32": "assets/icons/32.png",
@@ -46,7 +46,7 @@
 
   "browser_specific_settings": {
     "gecko": {
-      "id": "getinspire@example.com",
+      "id": "snapsite@example.com",
       "strict_min_version": "109.0"
     },
     "safari": {

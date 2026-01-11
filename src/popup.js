@@ -1,7 +1,7 @@
-// Popup script for GetInspire 2.1
+// Popup script for SnapSite 2.1
 // Cross-browser compatibility
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-console.log('[GetInspire Popup] Loaded (v2.1)');
+console.log('[SnapSite Popup] Loaded (v2.1)');
 
 // DOM elements
 const statusEl = document.getElementById('status');
@@ -150,7 +150,7 @@ if (startBtn) {
         }
       }
     } catch (error) {
-      console.error('[GetInspire] Error:', error);
+      console.error('[SnapSite] Error:', error);
       setStatus('Error: ' + error.message);
       resetProgress();
       showReadyState();
@@ -183,7 +183,7 @@ if (openOptionsLink) {
 
 // Message handler
 browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[GetInspire Popup] Message:', message.type);
+  console.log('[SnapSite Popup] Message:', message.type);
 
   switch (message.type) {
     case 'CAPTURE_STATUS':

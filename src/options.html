@@ -2,13 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>GetInspire Settings</title>
+  <title>SnapSite Settings</title>
   <script>
     // Apply theme immediately before CSS loads
     (function() {
       const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-      browserAPI.storage.sync.get(['getinspireTheme'], function(result) {
-        document.documentElement.setAttribute('data-theme', result.getinspireTheme === 'dark' ? 'dark' : 'light');
+      browserAPI.storage.sync.get(['snapsiteTheme'], function(result) {
+        document.documentElement.setAttribute('data-theme', result.snapsiteTheme === 'dark' ? 'dark' : 'light');
       });
     })();
   </script>
@@ -27,7 +27,7 @@
           </svg>
           Settings
         </h1>
-        <p>Customize how GetInspire captures web pages</p>
+        <p>Customize how SnapSite captures web pages</p>
       </div>
       <button id="themeToggle" class="theme-toggle" title="Toggle theme">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
