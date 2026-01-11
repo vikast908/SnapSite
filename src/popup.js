@@ -275,11 +275,8 @@ if (openOptionsLink) {
       openOptionsLink.style.transform = '';
     }, 200);
 
-    browserAPI.windows.create({
-      url: 'src/options.html',
-      type: 'popup',
-      width: 900,
-      height: 700
+    browserAPI.tabs.create({
+      url: browserAPI.runtime.getURL('src/options.html')
     });
   });
 
