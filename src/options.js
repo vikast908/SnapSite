@@ -2,12 +2,6 @@
 // Cross-browser compatibility: Use browser.* if available (Firefox), otherwise use chrome.*
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
-// Apply theme immediately on load
-browserAPI.storage.sync.get(['getinspireTheme'], (result) => {
-  const theme = (result.getinspireTheme === 'dark') ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', theme);
-});
-
 (async () => {
   console.log('[GetInspire Options] Initializing...');
 
