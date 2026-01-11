@@ -715,52 +715,55 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       /googletagmanager\.com/i,
       /gtag\/js/i,
       /gtm\.js/i,
-      /analytics/i,
+      /\/analytics\.js/i, // More specific - only skip analytics.js files
       /facebook\.net/i,
       /fbevents/i,
       /doubleclick\.net/i,
       /googlesyndication/i,
       /googleadservices/i,
       /hotjar\.com/i,
-      /mixpanel/i,
+      /mixpanel\.com/i,
       /segment\.com/i,
       /segment\.io/i,
-      /amplitude/i,
-      /intercom/i,
+      /amplitude\.com/i,
+      /intercom\.io/i,
       /crisp\.chat/i,
       /drift\.com/i,
-      /zendesk/i,
-      /hubspot/i,
-      /wisepops/i,
+      /zendesk\.com/i,
+      /hubspot\.com/i,
+      /wisepops\.com/i,
       /dwin1\.com/i,
-      /reb2b/i,
+      /reb2b\.js/i,
       /clarity\.ms/i,
-      /fullstory/i,
-      /mouseflow/i,
-      /crazyegg/i,
-      /optimizely/i,
+      /fullstory\.com/i,
+      /mouseflow\.com/i,
+      /crazyegg\.com/i,
+      /optimizely\.com/i,
       /vwo\.com/i,
-      /livechatinc/i,
+      /livechatinc\.com/i,
       /tawk\.to/i,
-      /freshdesk/i,
+      /freshdesk\.com/i,
       /gsi\/client/i, // Google Sign-In
-      /accounts\.google\.com/i,
-      /connect\.facebook/i,
-      /platform\.twitter/i,
-      /linkedin\.com\/in/i,
+      /accounts\.google\.com\/gsi/i,
+      /connect\.facebook\.net/i,
+      /platform\.twitter\.com/i,
       /recaptcha/i,
-      /captcha/i,
       /sentry\.io/i,
-      /bugsnag/i,
-      /rollbar/i,
-      /newrelic/i,
-      /datadoghq/i,
-      /logrocket/i
+      /bugsnag\.com/i,
+      /rollbar\.com/i,
+      /newrelic\.com/i,
+      /datadoghq\.com/i,
+      /logrocket\.com/i
     ];
+
+    // File extensions that should NEVER be skipped (images, fonts, etc.)
+    const NEVER_SKIP_EXTENSIONS = /\.(woff2?|ttf|otf|eot|svg|png|jpe?g|gif|webp|avif|ico|css)(\?|$)/i;
 
     // Check if URL should be skipped
     function shouldSkipUrl(url) {
       if (!url) return true;
+      // Never skip fonts, images, or CSS files
+      if (NEVER_SKIP_EXTENSIONS.test(url)) return false;
       return SKIP_URL_PATTERNS.some(pattern => pattern.test(url));
     }
 
