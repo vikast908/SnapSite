@@ -1,6 +1,6 @@
 # SnapSite v2.1 - Cross-Browser Extension (MV3)
 
-**The most comprehensive web page capture tool.** Snapshot any page with pixel-perfect accuracy or crawl entire sites into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, forms, tables, and more.
+**Save webpages offline with full source code & assets.** Snapshot any page with pixel-perfect accuracy or crawl multiple pages into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, forms, tables, and more.
 
 **Works on:** Chrome, Firefox, Edge, Safari, Opera, and Brave.
 

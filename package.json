@@ -1,7 +1,7 @@
 {
   "name": "snapsite",
   "version": "2.0.0",
-  "description": "Chrome extension to save web pages & entire sites as offline ZIP files",
+  "description": "Save webpages offline with full source code & assets",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vikast908/SnapSite.git"
