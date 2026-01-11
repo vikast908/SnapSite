@@ -16,3 +16,7 @@ node_modules/
 dist/
 build/
 
+# Claude Code documentation (local only)
+claude.md
+CLAUDE.md
+

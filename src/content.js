@@ -1200,16 +1200,57 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
     });
     console.log(`[GetInspire] Found ${imgCount} image sources from ${images.length} img elements`);
 
-    // Picture elements with multiple sources
+    // Picture elements with multiple sources (Enhanced v2.1)
     const pictures = document.querySelectorAll('picture');
+    let pictureSourceCount = 0;
     pictures.forEach(picture => {
       const sources = picture.querySelectorAll('source');
       sources.forEach(source => {
+        // Get media query for context
+        const mediaQuery = source.getAttribute('media') || '';
+        const mimeType = source.getAttribute('type') || '';
+
         if (source.srcset) {
-          parseSrcset(source.srcset).forEach(url => addAsset(url, 'image', source, { isPicture: true }));
+          parseSrcset(source.srcset).forEach(url => {
+            addAsset(url, 'image', source, {
+              isPicture: true,
+              mediaQuery,
+              mimeType,
+              format: mimeType.includes('avif') ? 'avif' :
+                      mimeType.includes('webp') ? 'webp' :
+                      mimeType.includes('png') ? 'png' : 'jpg'
+            });
+            pictureSourceCount++;
+          });
         }
-        if (source.src) addAsset(source.src, 'image', source, { isPicture: true });
+        if (source.src) {
+          addAsset(source.src, 'image', source, { isPicture: true, mediaQuery, mimeType });
+          pictureSourceCount++;
+        }
       });
+
+      // Also capture the fallback img inside picture
+      const fallbackImg = picture.querySelector('img');
+      if (fallbackImg) {
+        if (fallbackImg.src && !fallbackImg.src.startsWith('data:')) {
+          addAsset(fallbackImg.src, 'image', fallbackImg, { isPictureFallback: true });
+        }
+        if (fallbackImg.srcset) {
+          parseSrcset(fallbackImg.srcset).forEach(url =>
+            addAsset(url, 'image', fallbackImg, { isPictureFallback: true, isSrcset: true })
+          );
+        }
+      }
+    });
+    console.log(`[GetInspire] Found ${pictureSourceCount} picture sources from ${pictures.length} picture elements`);
+
+    // ==================== MODERN IMAGE FORMATS (AVIF, WebP, JPEG XL) ====================
+    // Specifically target modern format images that might be served conditionally
+    document.querySelectorAll('img[src*=".avif"], img[src*=".webp"], source[type*="avif"], source[type*="webp"]').forEach(el => {
+      const src = el.src || el.srcset?.split(',')[0]?.trim().split(' ')[0];
+      if (src && !src.startsWith('data:')) {
+        addAsset(src, 'image', el, { isModernFormat: true });
+      }
     });
 
     // ==================== META / OG / TWITTER IMAGES ====================
@@ -1660,6 +1701,499 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
 
     // NOTE: Audio and srcset already collected in enhanced section above
 
+    // ==================== SHADOW DOM & WEB COMPONENTS (v2.1) ====================
+    console.log('[GetInspire] Collecting Shadow DOM content...');
+    let shadowDomCount = 0;
+
+    function collectShadowDomAssets(root) {
+      // Find all elements that might have shadow roots
+      const allElements = root.querySelectorAll('*');
+      allElements.forEach(el => {
+        try {
+          const shadowRoot = el.shadowRoot;
+          if (shadowRoot) {
+            shadowDomCount++;
+            // Collect images from shadow DOM
+            shadowRoot.querySelectorAll('img[src]').forEach(img => {
+              if (img.src && !img.src.startsWith('data:')) {
+                addAsset(img.src, 'image', img, { fromShadowDom: true });
+              }
+            });
+            // Collect background images
+            shadowRoot.querySelectorAll('[style*="background"]').forEach(el => {
+              extractUrlsFromCSS(el.style.cssText).forEach(url => {
+                addAsset(url, 'css-asset', el, { fromShadowDom: true });
+              });
+            });
+            // Collect SVGs
+            shadowRoot.querySelectorAll('svg').forEach(svg => {
+              svg.setAttribute('data-gi-shadow-dom', 'true');
+            });
+            // Recursively check nested shadow roots
+            collectShadowDomAssets(shadowRoot);
+          }
+        } catch (e) {
+          // Closed shadow roots will throw
+        }
+      });
+    }
+    collectShadowDomAssets(document);
+    if (shadowDomCount > 0) {
+      console.log(`[GetInspire] Found ${shadowDomCount} shadow roots`);
+    }
+
+    // ==================== ENHANCED LAZY LOADING (v2.1) ====================
+    console.log('[GetInspire] Triggering enhanced lazy loading...');
+
+    // Trigger native lazy loading by removing loading="lazy" and forcing load
+    document.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]').forEach(el => {
+      el.removeAttribute('loading');
+      if (el.tagName === 'IMG' && el.dataset.src) {
+        el.src = el.dataset.src;
+      }
+    });
+
+    // Force intersection observer callbacks by scrolling elements into view
+    const lazyElements = document.querySelectorAll(
+      '[data-src], [data-lazy], [data-background], [data-bg], ' +
+      '.lazy, .lazyload, .lazyloaded, [data-ll-status]'
+    );
+    for (const el of lazyElements) {
+      try {
+        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        await new Promise(r => setTimeout(r, 50));
+      } catch (e) {}
+    }
+    // Scroll back to top
+    window.scrollTo({ top: 0, behavior: 'instant' });
+
+    // ==================== FORM STATE PRESERVATION (v2.1) ====================
+    console.log('[GetInspire] Preserving form element states...');
+
+    // Preserve input values as attributes for offline viewing
+    document.querySelectorAll('input').forEach(input => {
+      const type = input.type.toLowerCase();
+      if (type === 'text' || type === 'email' || type === 'tel' || type === 'url' ||
+          type === 'search' || type === 'number' || type === 'date' || type === 'time' ||
+          type === 'datetime-local' || type === 'month' || type === 'week' || type === 'color') {
+        if (input.value) {
+          input.setAttribute('value', input.value);
+          input.setAttribute('data-gi-preserved', 'true');
+        }
+      } else if (type === 'checkbox' || type === 'radio') {
+        if (input.checked) {
+          input.setAttribute('checked', 'checked');
+          input.setAttribute('data-gi-preserved', 'true');
+        } else {
+          input.removeAttribute('checked');
+        }
+      } else if (type === 'range') {
+        input.setAttribute('value', input.value);
+      }
+    });
+
+    // Preserve textarea content
+    document.querySelectorAll('textarea').forEach(textarea => {
+      if (textarea.value) {
+        textarea.textContent = textarea.value;
+        textarea.setAttribute('data-gi-preserved', 'true');
+      }
+    });
+
+    // Preserve select element selected options
+    document.querySelectorAll('select').forEach(select => {
+      const selectedIndex = select.selectedIndex;
+      if (selectedIndex >= 0) {
+        Array.from(select.options).forEach((option, idx) => {
+          if (idx === selectedIndex) {
+            option.setAttribute('selected', 'selected');
+          } else {
+            option.removeAttribute('selected');
+          }
+        });
+        select.setAttribute('data-gi-preserved', 'true');
+      }
+    });
+
+    // Preserve contenteditable content
+    document.querySelectorAll('[contenteditable="true"]').forEach(el => {
+      el.setAttribute('data-gi-content', el.innerHTML);
+    });
+
+    // ==================== DIALOG & DETAILS STATE (v2.1) ====================
+    console.log('[GetInspire] Preserving dialog and details states...');
+
+    // Preserve <dialog> open state
+    document.querySelectorAll('dialog').forEach(dialog => {
+      if (dialog.open) {
+        dialog.setAttribute('open', '');
+        dialog.setAttribute('data-gi-dialog-open', 'true');
+      }
+      // Also capture dialog's backdrop styles if visible
+      if (dialog.open) {
+        const computed = window.getComputedStyle(dialog);
+        dialog.style.display = computed.display;
+        dialog.style.position = computed.position;
+      }
+    });
+
+    // Preserve <details> open/closed state (common for FAQs, accordions)
+    document.querySelectorAll('details').forEach(details => {
+      if (details.open) {
+        details.setAttribute('open', '');
+      } else {
+        details.removeAttribute('open');
+      }
+      details.setAttribute('data-gi-details', 'true');
+    });
+
+    // ==================== POPOVER API SUPPORT (v2.1) ====================
+    // Handle elements with popover attribute (modern HTML)
+    document.querySelectorAll('[popover]').forEach(el => {
+      // Check if popover is showing
+      if (el.matches(':popover-open')) {
+        el.setAttribute('data-gi-popover-open', 'true');
+        el.style.display = 'block';
+      }
+    });
+
+    // ==================== OBJECT/EMBED ELEMENTS (v2.1) ====================
+    console.log('[GetInspire] Handling object and embed elements...');
+
+    // Handle PDFs and other embedded content
+    document.querySelectorAll('object[data], embed[src]').forEach(obj => {
+      const src = obj.getAttribute('data') || obj.getAttribute('src');
+      if (!src) return;
+
+      // Add asset for download
+      addAsset(src, 'embed', obj);
+
+      // Create fallback for PDFs
+      if (src.includes('.pdf')) {
+        const fallback = document.createElement('div');
+        fallback.className = 'gi-pdf-fallback';
+        fallback.style.cssText = `
+          padding: 20px;
+          background: #f5f5f5;
+          border: 1px solid #ddd;
+          text-align: center;
+          font-family: system-ui, sans-serif;
+        `;
+        fallback.innerHTML = `
+          <p style="margin: 0 0 10px;">PDF Document</p>
+          <a href="${src}" download style="color: #0066cc;">Download PDF</a>
+        `;
+        fallback.setAttribute('data-gi-original-embed', src);
+
+        // Insert after the object/embed
+        obj.parentNode.insertBefore(fallback, obj.nextSibling);
+        obj.setAttribute('data-gi-has-fallback', 'true');
+      }
+    });
+
+    // ==================== NOSCRIPT CONTENT (v2.1) ====================
+    // Since JavaScript won't work offline, show noscript content
+    console.log('[GetInspire] Processing noscript content...');
+
+    document.querySelectorAll('noscript').forEach(noscript => {
+      // Create a visible version of noscript content
+      const content = noscript.textContent || noscript.innerHTML;
+      if (content && content.trim()) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'gi-noscript-content';
+        wrapper.innerHTML = content;
+        wrapper.setAttribute('data-gi-from-noscript', 'true');
+        noscript.parentNode.insertBefore(wrapper, noscript.nextSibling);
+      }
+    });
+
+    // ==================== CLIP-PATH & MASK SVG REFERENCES (v2.1) ====================
+    console.log('[GetInspire] Collecting clip-path and mask SVG references...');
+
+    document.querySelectorAll('[style*="clip-path"], [style*="mask"]').forEach(el => {
+      const style = el.getAttribute('style') || '';
+      // Extract url() references
+      const urlMatches = style.match(/url\(["']?([^"')]+)["']?\)/g) || [];
+      urlMatches.forEach(match => {
+        const url = match.replace(/url\(["']?|["']?\)/g, '');
+        if (url && !url.startsWith('#') && !url.startsWith('data:')) {
+          addAsset(url, 'svg', el, { isClipMask: true });
+        }
+      });
+    });
+
+    // Also check computed styles for clip-path/mask with external URLs
+    // Optimized: only check elements likely to have these properties
+    const clipMaskSelectors = [
+      '[class*="clip"]', '[class*="mask"]', '[class*="shape"]',
+      'img', 'div[class]', 'section', 'article', 'header', 'figure'
+    ];
+    const clipMaskElements = new Set();
+    clipMaskSelectors.forEach(sel => {
+      try {
+        document.querySelectorAll(sel).forEach(el => clipMaskElements.add(el));
+      } catch (e) {}
+    });
+
+    clipMaskElements.forEach(el => {
+      try {
+        const computed = window.getComputedStyle(el);
+        const clipPath = computed.clipPath;
+        const maskImage = computed.maskImage || computed.webkitMaskImage;
+
+        if (clipPath && clipPath.includes('url(') && !clipPath.includes('#')) {
+          const match = clipPath.match(/url\(["']?([^"')]+)["']?\)/);
+          if (match && match[1] && !match[1].startsWith('data:')) {
+            addAsset(match[1], 'svg', el, { isClipPath: true });
+          }
+        }
+
+        if (maskImage && maskImage.includes('url(') && !maskImage.includes('#')) {
+          const match = maskImage.match(/url\(["']?([^"')]+)["']?\)/);
+          if (match && match[1] && !match[1].startsWith('data:')) {
+            addAsset(match[1], 'image', el, { isMask: true });
+          }
+        }
+      } catch (e) {}
+    });
+
+    // ==================== ARIA & ACCESSIBILITY PRESERVATION (v2.1) ====================
+    console.log('[GetInspire] Preserving ARIA states...');
+
+    // Preserve expanded/collapsed states
+    document.querySelectorAll('[aria-expanded]').forEach(el => {
+      el.setAttribute('data-gi-aria-expanded', el.getAttribute('aria-expanded'));
+    });
+
+    // Preserve selected states
+    document.querySelectorAll('[aria-selected]').forEach(el => {
+      el.setAttribute('data-gi-aria-selected', el.getAttribute('aria-selected'));
+    });
+
+    // Preserve checked states (for custom checkboxes)
+    document.querySelectorAll('[aria-checked]').forEach(el => {
+      el.setAttribute('data-gi-aria-checked', el.getAttribute('aria-checked'));
+    });
+
+    // Preserve hidden states
+    document.querySelectorAll('[aria-hidden="false"]').forEach(el => {
+      el.setAttribute('data-gi-aria-visible', 'true');
+    });
+
+    // ==================== PROGRESS/METER/OUTPUT ELEMENTS (v2.1) ====================
+    console.log('[GetInspire] Preserving progress and meter values...');
+
+    // Progress elements
+    document.querySelectorAll('progress').forEach(progress => {
+      progress.setAttribute('value', progress.value);
+      if (progress.max) progress.setAttribute('max', progress.max);
+      progress.setAttribute('data-gi-preserved', 'true');
+    });
+
+    // Meter elements
+    document.querySelectorAll('meter').forEach(meter => {
+      meter.setAttribute('value', meter.value);
+      if (meter.min) meter.setAttribute('min', meter.min);
+      if (meter.max) meter.setAttribute('max', meter.max);
+      if (meter.low) meter.setAttribute('low', meter.low);
+      if (meter.high) meter.setAttribute('high', meter.high);
+      if (meter.optimum) meter.setAttribute('optimum', meter.optimum);
+      meter.setAttribute('data-gi-preserved', 'true');
+    });
+
+    // Output elements (form calculation results)
+    document.querySelectorAll('output').forEach(output => {
+      output.setAttribute('data-gi-value', output.value);
+      output.textContent = output.value;
+    });
+
+    // ==================== IMAGE MAPS (v2.1) ====================
+    console.log('[GetInspire] Preserving image maps...');
+
+    document.querySelectorAll('map').forEach(map => {
+      map.setAttribute('data-gi-map', 'true');
+      // Ensure coordinates are preserved
+      map.querySelectorAll('area').forEach(area => {
+        if (area.href) {
+          area.setAttribute('data-gi-href', area.href);
+        }
+      });
+    });
+
+    // ==================== TEMPLATE CONTENT (v2.1) ====================
+    // Templates aren't rendered but might contain useful content for offline
+    document.querySelectorAll('template').forEach(template => {
+      if (template.content && template.content.childNodes.length > 0) {
+        template.setAttribute('data-gi-has-content', 'true');
+      }
+    });
+
+    // ==================== DECLARATIVE SHADOW DOM (v2.1) ====================
+    // Handle <template shadowroot="open|closed">
+    document.querySelectorAll('template[shadowroot], template[shadowrootmode]').forEach(template => {
+      template.setAttribute('data-gi-declarative-shadow', 'true');
+    });
+
+    // ==================== DATALIST OPTIONS (v2.1) ====================
+    // Preserve datalist options for autocomplete fields
+    document.querySelectorAll('datalist').forEach(datalist => {
+      datalist.setAttribute('data-gi-datalist', 'true');
+      // Ensure all options have value attributes
+      datalist.querySelectorAll('option').forEach(option => {
+        if (option.value) {
+          option.setAttribute('value', option.value);
+        }
+      });
+    });
+
+    // ==================== INERT ATTRIBUTE (v2.1) ====================
+    // Preserve inert state (non-interactive regions)
+    document.querySelectorAll('[inert]').forEach(el => {
+      el.setAttribute('data-gi-inert', 'true');
+    });
+
+    // ==================== COLOR SCHEME & THEME (v2.1) ====================
+    // Preserve color-scheme meta tag
+    const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+    if (colorSchemeMeta) {
+      colorSchemeMeta.setAttribute('data-gi-preserved', 'true');
+    }
+
+    // Preserve theme-color meta tags
+    document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
+      meta.setAttribute('data-gi-preserved', 'true');
+    });
+
+    // Capture prefers-color-scheme state
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-gi-color-scheme', prefersDark ? 'dark' : 'light');
+
+    // ==================== TABLE ENHANCEMENT (v2.1) ====================
+    console.log('[GetInspire] Enhancing table capture...');
+
+    document.querySelectorAll('table').forEach(table => {
+      // Capture computed styles for sticky headers
+      const stickyElements = table.querySelectorAll('[style*="sticky"], th, thead');
+      stickyElements.forEach(el => {
+        const computed = window.getComputedStyle(el);
+        if (computed.position === 'sticky') {
+          el.setAttribute('data-gi-sticky', 'true');
+          el.style.position = 'sticky';
+          el.style.top = computed.top;
+          el.style.zIndex = computed.zIndex;
+          el.style.backgroundColor = computed.backgroundColor;
+        }
+      });
+
+      // Expand virtualized/windowed tables by finding all row containers
+      const virtualContainers = table.querySelectorAll('[style*="transform"], [style*="height"]');
+      virtualContainers.forEach(container => {
+        // Remove transforms that might hide rows
+        if (container.style.transform && container.style.transform !== 'none') {
+          container.setAttribute('data-gi-original-transform', container.style.transform);
+          container.style.transform = 'none';
+        }
+      });
+
+      // Ensure all table cells have preserved dimensions
+      table.querySelectorAll('td, th').forEach(cell => {
+        const computed = window.getComputedStyle(cell);
+        if (!cell.style.width) {
+          cell.style.minWidth = computed.width;
+        }
+      });
+    });
+
+    // ==================== CROSS-ORIGIN IFRAME HANDLING (v2.1) ====================
+    console.log('[GetInspire] Creating cross-origin iframe placeholders...');
+
+    document.querySelectorAll('iframe').forEach(iframe => {
+      const src = iframe.src;
+      if (!src || src.startsWith('about:') || src.startsWith('javascript:')) return;
+
+      try {
+        const iframeUrl = new URL(src);
+        // Check if cross-origin
+        if (iframeUrl.origin !== window.location.origin) {
+          // Create a placeholder for cross-origin iframes
+          const placeholder = document.createElement('div');
+          placeholder.className = 'gi-iframe-placeholder';
+          placeholder.style.cssText = `
+            width: ${iframe.offsetWidth || 300}px;
+            height: ${iframe.offsetHeight || 150}px;
+            background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+            border: 2px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            font-family: system-ui, sans-serif;
+            color: #666;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+          `;
+          placeholder.innerHTML = `
+            <div style="font-size: 14px; margin-bottom: 8px;">External Content</div>
+            <a href="${src}" target="_blank" rel="noopener" style="color: #0066cc; font-size: 12px; word-break: break-all;">${iframeUrl.hostname}</a>
+          `;
+          placeholder.setAttribute('data-gi-original-iframe', src);
+
+          // Try to get embed thumbnail (YouTube, Vimeo, etc.)
+          if (src.includes('youtube.com') || src.includes('youtu.be')) {
+            const videoId = src.match(/(?:embed\/|v=|youtu\.be\/)([^?&]+)/)?.[1];
+            if (videoId) {
+              const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+              addAsset(thumbUrl, 'image', iframe, { isEmbedThumb: true });
+              placeholder.style.backgroundImage = `url(${thumbUrl})`;
+              placeholder.style.backgroundSize = 'cover';
+              placeholder.style.backgroundPosition = 'center';
+              placeholder.innerHTML = `<div style="background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 8px;">
+                <a href="${src}" target="_blank" style="color: white; text-decoration: none;">Watch on YouTube</a>
+              </div>`;
+            }
+          } else if (src.includes('vimeo.com')) {
+            const vimeoId = src.match(/video\/(\d+)/)?.[1];
+            if (vimeoId) {
+              placeholder.innerHTML = `<div style="background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 8px;">
+                <a href="https://vimeo.com/${vimeoId}" target="_blank" style="color: white; text-decoration: none;">Watch on Vimeo</a>
+              </div>`;
+            }
+          }
+
+          // Replace iframe with placeholder
+          iframe.parentNode.insertBefore(placeholder, iframe);
+          iframe.style.display = 'none';
+          iframe.setAttribute('data-gi-hidden', 'true');
+        }
+      } catch (e) {}
+    });
+
+    // ==================== CSS CUSTOM PROPERTIES (v2.1) ====================
+    console.log('[GetInspire] Capturing CSS custom properties...');
+
+    // Capture computed CSS custom properties from :root
+    const rootStyles = window.getComputedStyle(document.documentElement);
+    const customProperties = [];
+
+    // Get all custom properties defined in stylesheets
+    for (const sheet of document.styleSheets) {
+      try {
+        for (const rule of sheet.cssRules || []) {
+          if (rule.type === CSSRule.STYLE_RULE && rule.selectorText === ':root') {
+            const cssText = rule.style.cssText;
+            // Extract custom properties
+            const propMatches = cssText.match(/--[\w-]+\s*:[^;]+;/g) || [];
+            propMatches.forEach(prop => customProperties.push(prop));
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (customProperties.length > 0) {
+      console.log(`[GetInspire] Found ${customProperties.length} CSS custom properties`);
+    }
+
     console.log(`[GetInspire] Total assets to download: ${assetsToDownload.size}`);
 
     // Safety check - limit total assets to prevent memory issues
@@ -2015,10 +2549,19 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       return keyframes;
     }
 
-    // Collect all CSS @property declarations, keyframes, and @font-face rules
+    // Collect all CSS @property declarations, keyframes, @font-face, and modern CSS rules
     const allPropertyRules = new Set();
     const allKeyframes = new Set();
     const allFontFaceRules = new Set();
+    const allContainerRules = new Set();  // @container queries
+    const allLayerRules = new Set();      // @layer declarations
+    const allSupportsRules = new Set();   // @supports queries
+    const allScopeRules = new Set();      // @scope rules
+    const allPrintRules = new Set();      // @media print rules
+    const allScrollTimelines = new Set(); // @scroll-timeline and scroll-driven animations
+    const allCounterStyles = new Set();   // @counter-style (custom list markers)
+    const allPageRules = new Set();       // @page (print page settings)
+    const allFontFeatures = new Set();    // @font-feature-values (OpenType)
 
     // Helper function to extract @font-face rules from CSS
     function extractFontFaceRules(cssText) {
@@ -2045,6 +2588,270 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         }
       }
       return fontFaceRules;
+    }
+
+    // Helper function to extract @container rules (CSS Container Queries)
+    function extractContainerRules(cssText) {
+      const containerRules = [];
+      const containerPattern = /@container\s+/g;
+      let match;
+
+      while ((match = containerPattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        // Find the opening brace
+        let braceStart = cssText.indexOf('{', containerPattern.lastIndex);
+        if (braceStart === -1) continue;
+
+        // Find the matching closing brace
+        let braceCount = 1;
+        let currentIndex = braceStart + 1;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          const fullContainer = cssText.substring(startIndex, currentIndex);
+          containerRules.push(fullContainer);
+        }
+      }
+      return containerRules;
+    }
+
+    // Helper function to extract @layer rules (CSS Cascade Layers)
+    function extractLayerRules(cssText) {
+      const layerRules = [];
+      // Match both @layer declarations and @layer blocks
+      const layerPattern = /@layer\s+/g;
+      let match;
+
+      while ((match = layerPattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        // Check if it's a declaration (ends with ;) or a block (has {})
+        let nextSemicolon = cssText.indexOf(';', layerPattern.lastIndex);
+        let nextBrace = cssText.indexOf('{', layerPattern.lastIndex);
+
+        // Declaration: @layer name1, name2;
+        if (nextSemicolon !== -1 && (nextBrace === -1 || nextSemicolon < nextBrace)) {
+          const declaration = cssText.substring(startIndex, nextSemicolon + 1);
+          layerRules.push(declaration);
+          continue;
+        }
+
+        // Block: @layer name { ... }
+        if (nextBrace !== -1) {
+          let braceCount = 1;
+          let currentIndex = nextBrace + 1;
+
+          while (braceCount > 0 && currentIndex < cssText.length) {
+            const char = cssText[currentIndex];
+            if (char === '{') braceCount++;
+            else if (char === '}') braceCount--;
+            currentIndex++;
+          }
+
+          if (braceCount === 0) {
+            const fullLayer = cssText.substring(startIndex, currentIndex);
+            layerRules.push(fullLayer);
+          }
+        }
+      }
+      return layerRules;
+    }
+
+    // Helper function to extract @supports rules (CSS Feature Queries)
+    function extractSupportsRules(cssText) {
+      const supportsRules = [];
+      const supportsPattern = /@supports\s+/g;
+      let match;
+
+      while ((match = supportsPattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        let braceStart = cssText.indexOf('{', supportsPattern.lastIndex);
+        if (braceStart === -1) continue;
+
+        let braceCount = 1;
+        let currentIndex = braceStart + 1;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          const fullSupports = cssText.substring(startIndex, currentIndex);
+          supportsRules.push(fullSupports);
+        }
+      }
+      return supportsRules;
+    }
+
+    // Helper function to extract @scope rules (CSS Scope)
+    function extractScopeRules(cssText) {
+      const scopeRules = [];
+      const scopePattern = /@scope\s*/g;
+      let match;
+
+      while ((match = scopePattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        let braceStart = cssText.indexOf('{', scopePattern.lastIndex);
+        if (braceStart === -1) continue;
+
+        let braceCount = 1;
+        let currentIndex = braceStart + 1;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          const fullScope = cssText.substring(startIndex, currentIndex);
+          scopeRules.push(fullScope);
+        }
+      }
+      return scopeRules;
+    }
+
+    // Helper function to extract @media print rules
+    function extractPrintRules(cssText) {
+      const printRules = [];
+      const printPattern = /@media\s+print\s*\{|@media[^{]*\bprint\b[^{]*\{/gi;
+      let match;
+
+      while ((match = printPattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        let braceCount = 1;
+        let currentIndex = printPattern.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          const fullPrint = cssText.substring(startIndex, currentIndex);
+          printRules.push(fullPrint);
+        }
+      }
+      return printRules;
+    }
+
+    // Helper function to extract @scroll-timeline and scroll-driven animation rules
+    function extractScrollTimelineRules(cssText) {
+      const scrollRules = [];
+      // @scroll-timeline
+      const scrollTimelinePattern = /@scroll-timeline\s+[\w-]+\s*\{/g;
+      let match;
+
+      while ((match = scrollTimelinePattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        let braceCount = 1;
+        let currentIndex = scrollTimelinePattern.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          scrollRules.push(cssText.substring(startIndex, currentIndex));
+        }
+      }
+
+      // Also capture animation-timeline and scroll-timeline-name properties in rules
+      const timelinePropsPattern = /[^{}]*\{[^{}]*(animation-timeline|scroll-timeline-name|view-timeline-name)[^{}]*\}/g;
+      while ((match = timelinePropsPattern.exec(cssText)) !== null) {
+        scrollRules.push(match[0]);
+      }
+
+      return scrollRules;
+    }
+
+    // Helper function to extract @counter-style rules (custom list markers)
+    function extractCounterStyleRules(cssText) {
+      const counterRules = [];
+      const counterPattern = /@counter-style\s+[\w-]+\s*\{/g;
+      let match;
+
+      while ((match = counterPattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        let braceCount = 1;
+        let currentIndex = counterPattern.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          counterRules.push(cssText.substring(startIndex, currentIndex));
+        }
+      }
+      return counterRules;
+    }
+
+    // Helper function to extract @page rules (print page settings)
+    function extractPageRules(cssText) {
+      const pageRules = [];
+      const pagePattern = /@page\s*[^{]*\{/g;
+      let match;
+
+      while ((match = pagePattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        let braceCount = 1;
+        let currentIndex = pagePattern.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          pageRules.push(cssText.substring(startIndex, currentIndex));
+        }
+      }
+      return pageRules;
+    }
+
+    // Helper function to extract @font-feature-values rules (OpenType features)
+    function extractFontFeatureRules(cssText) {
+      const fontFeatureRules = [];
+      const fontFeaturePattern = /@font-feature-values\s+[^{]+\{/g;
+      let match;
+
+      while ((match = fontFeaturePattern.exec(cssText)) !== null) {
+        const startIndex = match.index;
+        let braceCount = 1;
+        let currentIndex = fontFeaturePattern.lastIndex;
+
+        while (braceCount > 0 && currentIndex < cssText.length) {
+          const char = cssText[currentIndex];
+          if (char === '{') braceCount++;
+          else if (char === '}') braceCount--;
+          currentIndex++;
+        }
+
+        if (braceCount === 0) {
+          fontFeatureRules.push(cssText.substring(startIndex, currentIndex));
+        }
+      }
+      return fontFeatureRules;
     }
 
     // Get all link stylesheets
@@ -2085,6 +2892,15 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
         extractCSSProperties(cssText).forEach(rule => allPropertyRules.add(rule));
         extractKeyframes(cssText).forEach(kf => allKeyframes.add(kf));
         extractFontFaceRules(cssText).forEach(ff => allFontFaceRules.add(ff));
+        extractContainerRules(cssText).forEach(cr => allContainerRules.add(cr));
+        extractLayerRules(cssText).forEach(lr => allLayerRules.add(lr));
+        extractSupportsRules(cssText).forEach(sr => allSupportsRules.add(sr));
+        extractScopeRules(cssText).forEach(sc => allScopeRules.add(sc));
+        extractPrintRules(cssText).forEach(pr => allPrintRules.add(pr));
+        extractScrollTimelineRules(cssText).forEach(st => allScrollTimelines.add(st));
+        extractCounterStyleRules(cssText).forEach(cs => allCounterStyles.add(cs));
+        extractPageRules(cssText).forEach(pg => allPageRules.add(pg));
+        extractFontFeatureRules(cssText).forEach(ff => allFontFeatures.add(ff));
 
         // Replace URLs in CSS with downloaded assets
         for (const [url, data] of downloadedAssets) {
@@ -2141,6 +2957,15 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       extractCSSProperties(cssText).forEach(rule => allPropertyRules.add(rule));
       extractKeyframes(cssText).forEach(kf => allKeyframes.add(kf));
       extractFontFaceRules(cssText).forEach(ff => allFontFaceRules.add(ff));
+      extractContainerRules(cssText).forEach(cr => allContainerRules.add(cr));
+      extractLayerRules(cssText).forEach(lr => allLayerRules.add(lr));
+      extractSupportsRules(cssText).forEach(sr => allSupportsRules.add(sr));
+      extractScopeRules(cssText).forEach(sc => allScopeRules.add(sc));
+      extractPrintRules(cssText).forEach(pr => allPrintRules.add(pr));
+      extractScrollTimelineRules(cssText).forEach(st => allScrollTimelines.add(st));
+      extractCounterStyleRules(cssText).forEach(cs => allCounterStyles.add(cs));
+      extractPageRules(cssText).forEach(pg => allPageRules.add(pg));
+      extractFontFeatureRules(cssText).forEach(ff => allFontFeatures.add(ff));
 
       // Replace URLs in inline CSS
       for (const [url, data] of downloadedAssets) {
@@ -2284,6 +3109,70 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       styles.unshift(`/* @font-face rules (icon fonts, web fonts) */\n${fontFaceCSS}\n`);
     } else {
       console.log('[GetInspire] No @font-face rules found');
+    }
+
+    // Add modern CSS features (v2.1 Enhanced)
+    // @container queries (CSS Container Queries)
+    if (allContainerRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allContainerRules.size} @container rules`);
+      const containerCSS = `/* CSS Container Queries */\n${[...allContainerRules].join('\n\n')}\n`;
+      styles.push(containerCSS);
+    }
+
+    // @layer declarations (CSS Cascade Layers)
+    if (allLayerRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allLayerRules.size} @layer rules`);
+      const layerCSS = `/* CSS Cascade Layers */\n${[...allLayerRules].join('\n\n')}\n`;
+      styles.unshift(layerCSS); // Layers should be at the beginning
+    }
+
+    // @supports queries (CSS Feature Queries)
+    if (allSupportsRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allSupportsRules.size} @supports rules`);
+      const supportsCSS = `/* CSS Feature Queries (@supports) */\n${[...allSupportsRules].join('\n\n')}\n`;
+      styles.push(supportsCSS);
+    }
+
+    // @scope rules (CSS Scope)
+    if (allScopeRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allScopeRules.size} @scope rules`);
+      const scopeCSS = `/* CSS Scope Rules */\n${[...allScopeRules].join('\n\n')}\n`;
+      styles.push(scopeCSS);
+    }
+
+    // @media print rules
+    if (allPrintRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allPrintRules.size} @media print rules`);
+      const printCSS = `/* Print Stylesheet Rules */\n${[...allPrintRules].join('\n\n')}\n`;
+      styles.push(printCSS);
+    }
+
+    // Scroll-driven animations
+    if (allScrollTimelines.size > 0) {
+      console.log(`[GetInspire] Preserved ${allScrollTimelines.size} scroll-timeline rules`);
+      const scrollCSS = `/* Scroll-driven Animation Rules */\n${[...allScrollTimelines].join('\n\n')}\n`;
+      styles.push(scrollCSS);
+    }
+
+    // @counter-style rules (custom list markers)
+    if (allCounterStyles.size > 0) {
+      console.log(`[GetInspire] Preserved ${allCounterStyles.size} @counter-style rules`);
+      const counterCSS = `/* Custom Counter Styles */\n${[...allCounterStyles].join('\n\n')}\n`;
+      styles.unshift(counterCSS); // Should be early in CSS
+    }
+
+    // @page rules (print page settings)
+    if (allPageRules.size > 0) {
+      console.log(`[GetInspire] Preserved ${allPageRules.size} @page rules`);
+      const pageCSS = `/* Print Page Rules */\n${[...allPageRules].join('\n\n')}\n`;
+      styles.push(pageCSS);
+    }
+
+    // @font-feature-values (OpenType font features)
+    if (allFontFeatures.size > 0) {
+      console.log(`[GetInspire] Preserved ${allFontFeatures.size} @font-feature-values rules`);
+      const fontFeatureCSS = `/* OpenType Font Feature Values */\n${[...allFontFeatures].join('\n\n')}\n`;
+      styles.unshift(fontFeatureCSS); // Should be early with fonts
     }
 
     // Add computed styles for animated elements
@@ -2601,6 +3490,16 @@ const crawlBaseDomain = window.__GETINSPIRE_CRAWL_DOMAIN__ || null;
       '</head>',
       `<style>\n${combinedCSS}\n</style>\n${carouselScript}\n</head>`
     );
+
+    // Ensure UTF-8 charset meta tag is present at the very beginning of <head>
+    // This prevents encoding issues when the HTML file is opened offline
+    // Browsers need charset in the first 1024 bytes to correctly interpret UTF-8 characters
+    console.log('[GetInspire] Ensuring UTF-8 charset declaration...');
+    // Remove any existing charset meta tags to avoid duplicates
+    finalHtml = finalHtml.replace(/<meta\s+charset\s*=\s*["'][^"']*["']\s*\/?>/gi, '');
+    finalHtml = finalHtml.replace(/<meta\s+http-equiv\s*=\s*["']Content-Type["'][^>]*charset[^>]*>/gi, '');
+    // Inject UTF-8 charset meta tag right after <head>
+    finalHtml = finalHtml.replace(/<head([^>]*)>/i, '<head$1>\n<meta charset="utf-8">');
 
     // Remove Content-Security-Policy meta tags that would block inline styles/scripts/fonts
     // These policies are designed for the live site and break offline viewing

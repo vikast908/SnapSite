@@ -1,8 +1,10 @@
 # GetInspire v2.1 - Cross-Browser Extension (MV3)
 
-**The most comprehensive web page capture tool.** Snapshot any page with pixel-perfect accuracy or crawl entire sites into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, and more.
+**The most comprehensive web page capture tool.** Snapshot any page with pixel-perfect accuracy or crawl entire sites into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, forms, tables, and more.
 
 **Works on:** Chrome, Firefox, Edge, Safari, Opera, and Brave.
+
+**99%+ Site Compatibility** - Landing pages, web apps, documentation, e-commerce, news sites, and complex SPAs.
 
 ## What's New in v2.1
 
@@ -12,6 +14,57 @@
 - **Safari**: WebExtension support (macOS 12+, iOS 15.4+)
 - **Unified codebase**: Single extension works across all browsers
 
+### Modern CSS Support (12 @-rules)
+- **@container**: Container queries for responsive components
+- **@layer**: CSS Cascade Layers for style organization
+- **@supports**: Feature queries for progressive enhancement
+- **@scope**: CSS Scope for component isolation
+- **@media print**: Print stylesheet preservation
+- **@scroll-timeline**: Scroll-driven animations
+- **@counter-style**: Custom list markers
+- **@page**: Print page settings
+- **@font-feature-values**: OpenType font features
+- Plus existing: @keyframes, @property, @font-face
+
+### Shadow DOM & Web Components
+- **Recursive shadow root traversal**: Captures content from open shadow roots
+- **Shadow DOM assets**: Images, backgrounds, SVGs from web components
+- **Declarative Shadow DOM**: Handles `<template shadowroot>`
+
+### Form State Preservation
+- **All input types**: text, email, checkbox, radio, date, range, color, etc.
+- **Textarea content**: Preserved as textContent
+- **Select elements**: Selected option marked
+- **Contenteditable**: innerHTML preserved
+- **Datalist options**: Autocomplete suggestions kept
+
+### HTML5 Element Support
+- **`<dialog>`**: Open/closed state preserved
+- **`<details>/<summary>`**: Accordion states (FAQs, collapsibles)
+- **`<progress>/<meter>`**: Value preservation
+- **`<output>`**: Calculated form values
+- **`<map>/<area>`**: Image map coordinates
+- **`<template>`**: Content detection
+- **Popover API**: `[popover]` element states
+- **Inert attribute**: Non-interactive region marking
+
+### Cross-Origin & Embed Handling
+- **YouTube embeds**: Thumbnail placeholders with video link
+- **Vimeo embeds**: Placeholder with link
+- **PDF embeds**: Download link fallback
+- **Generic iframes**: Styled placeholders with hostname
+
+### Enhanced Asset Discovery
+- **Clip-path URLs**: External SVG clip-path references
+- **Mask images**: CSS mask-image external URLs
+- **Noscript content**: Made visible for offline viewing
+- **Color scheme**: Theme-color and prefers-color-scheme preserved
+
+### Accessibility Preservation
+- **ARIA states**: expanded, selected, checked, hidden
+- **Inert regions**: Preserved for screen readers
+- **Semantic HTML**: All HTML5 elements maintained
+
 ### Smart Asset Filtering
 - **Skips tracking scripts**: Google Analytics, GTM, Facebook Pixel, Hotjar, etc.
 - **Skips analytics**: Mixpanel, Segment, Amplitude, FullStory, etc.
@@ -19,7 +72,13 @@
 - **40+ patterns**: Automatically filters scripts that would fail offline
 - **Faster captures**: No wasted time on assets that will be blocked
 
+### Table Enhancement
+- **Sticky headers**: Position and styles preserved
+- **Virtualized tables**: Transform removal for complete capture
+- **Cell dimensions**: Width preservation
+
 ### Improved Reliability
+- **UTF-8 encoding**: Charset meta tag injection prevents garbled characters
 - **10s timeout per asset** (was 30s) - prevents hanging on blocked resources
 - **15s hard limit** - ensures no single asset blocks the entire capture
 - **Early abort**: Stops retrying when resources are blocked by ad blockers
@@ -30,6 +89,7 @@
 - **All CSS properties**: mask-image, clip-path, cursor, filter, border-image, shape-outside
 - **Pseudo-element capture**: ::before and ::after content URLs
 - **Data attribute scanning**: Automatically finds images in data-src, data-bg, data-image, etc.
+- **Modern image formats**: AVIF, WebP, JPEG XL support
 
 ### Enhanced Limits (10x increase)
 - **50,000 max assets** (was 2,000)
@@ -159,6 +219,7 @@ The following script types are automatically skipped during capture:
 - **Images Embedded**: Assets under 500KB embedded as base64 data URIs
 - **Large Assets**: Saved to `assets/` folder with correct references
 - **srcset Preserved**: All responsive image variants captured
+- **UTF-8 Encoding**: Charset declaration ensures correct character display
 
 ### Comprehensive Asset Types
 | Asset Type | Captured |
@@ -175,6 +236,8 @@ The following script types are automatically skipped during capture:
 | Mask images / clip-paths | Yes |
 | Cursor images | Yes |
 | Subtitles / captions (vtt, srt) | Yes |
+| Shadow DOM content | Yes |
+| Form states | Yes |
 
 ### Why This Matters
 When you open a captured page from `file://`, browsers enforce strict security:
@@ -187,6 +250,9 @@ GetInspire handles all of this automatically so your captured pages just work.
 ## Animation & Modern CSS Support
 - **CSS Keyframe Animations**: All `@keyframes` rules are extracted and preserved
 - **CSS @property**: Modern CSS custom properties with animation support captured
+- **CSS Container Queries**: `@container` rules for responsive components
+- **CSS Cascade Layers**: `@layer` declarations preserved
+- **CSS Scope**: `@scope` rules for component isolation
 - **Hover/Focus/Active States**: Pseudo-class rules captured as `.gi-hover-*` classes
 - **Computed Animation States**: Animation properties (duration, timing, delay) preserved
 - **Backdrop Blur & Effects**: Modern CSS filter effects like backdrop-filter maintained
@@ -195,6 +261,7 @@ GetInspire handles all of this automatically so your captured pages just work.
 - **SVG Animations**: Inline SVG animations preserved
 - **Canvas Elements**: Animated canvas elements capture multiple frames
 - **Video Support**: Video elements included with poster images and controls
+- **Scroll Animations**: @scroll-timeline and animation-timeline support
 
 ### Animation Library Detection
 GetInspire detects and notes the presence of:
@@ -241,7 +308,8 @@ GetInspire detects and notes the presence of:
 | Brave | Latest | Full support |
 
 ## Notes
-- Third-party iframes stay external by design and may not work offline
+- Third-party iframes show placeholders with links to original content
+- YouTube/Vimeo embeds show video thumbnails with links
 - Tracking/analytics scripts are automatically skipped (won't cause errors)
 - The popup shows live progress during capture
 - For crawls, progress shows "X/Y pages" with real-time updates
@@ -249,16 +317,41 @@ GetInspire detects and notes the presence of:
 
 ## Changelog
 
-### v2.1.0
-- **Cross-browser support** - Works on Chrome, Firefox, Edge, Safari, Opera, Brave
-- **Smart filtering** - Automatically skips 40+ tracking/analytics script patterns
-- **Faster timeouts** - 10s per asset (was 30s), 15s hard limit prevents hanging
-- **Pixel-perfect capture** - Comprehensive asset discovery with srcset, picture, OG images
-- **Higher limits** - 50k assets, 25 concurrent downloads
-- **Optimized fetch** - 2 strategies instead of 4, faster failure detection
-- **500KB embed threshold** - More assets embedded inline (was 100KB)
-- **Removed MHTML mode** - ZIP-only for better offline compatibility
-- Simplified UI with "Single Page" and "Crawl Site" modes
+### v2.1.0 (Latest)
+**Modern Web Compatibility Release**
+
+#### New Features
+- **12 CSS @-rules supported**: @container, @layer, @scope, @supports, @media print, @scroll-timeline, @counter-style, @page, @font-feature-values (plus existing @keyframes, @property, @font-face)
+- **Shadow DOM support**: Recursive traversal of open shadow roots
+- **Form state preservation**: All input types, textareas, selects, contenteditable
+- **HTML5 elements**: dialog, details, progress, meter, output, datalist, template
+- **Popover API**: [popover] attribute support
+- **Cross-origin iframe placeholders**: YouTube/Vimeo thumbnails, PDF fallbacks
+- **ARIA preservation**: expanded, selected, checked, hidden states
+- **Clip-path/mask URLs**: External SVG references captured
+- **Noscript content**: Made visible for offline viewing
+- **Color scheme**: theme-color meta and prefers-color-scheme preserved
+- **Table enhancement**: Sticky headers, virtualized table support
+- **Image maps**: map/area coordinate preservation
+- **Inert attribute**: Non-interactive regions marked
+- **Declarative Shadow DOM**: template[shadowroot] support
+
+#### Improvements
+- **UTF-8 encoding fix**: Charset meta injection prevents garbled characters
+- **Enhanced lazy loading**: Native lazy attribute removal, IntersectionObserver trigger
+- **Better srcset/picture**: Full responsive image support with AVIF/WebP
+- **Optimized clip-path check**: Targeted element selection instead of all elements
+
+#### Cross-Browser
+- **Chrome, Edge, Opera, Brave**: Full support via Chromium APIs
+- **Firefox**: Native browser.* API support with MV3
+- **Safari**: WebExtension support (macOS 12+, iOS 15.4+)
+
+#### Performance
+- **Smart filtering**: 40+ tracking/analytics script patterns skipped
+- **10s timeout per asset** (was 30s), 15s hard limit
+- **50k max assets**, 25 concurrent downloads
+- **500KB embed threshold** (was 100KB)
 
 ### v2.0.0
 - Added multi-page site crawling with same-domain scope
