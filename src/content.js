@@ -2684,7 +2684,7 @@ GetInspire Version: 2.1.0
 - Canvases captured: ${canvases.length}
 - Videos found: ${videos.length}
 - Audio files found: ${audioElements.length}
-- Script files found: ${scriptElements.length}
+- Script elements on page: ${document.querySelectorAll('script').length}
 - Fonts extracted: ${[...assetsToDownload.values()].filter(d => d.type === 'font').length}
 
 ## Animation Support (v2.0 Enhanced)
