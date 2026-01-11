@@ -70,7 +70,6 @@ html, body {
 .header-icon {
   width: 26px;
   height: 26px;
-  color: var(--ui-accent);
 }
 
 /* Theme Toggle in Header */
@@ -182,7 +181,7 @@ input[type="number"]:focus,
 textarea:focus {
   outline: none;
   border-color: var(--ui-accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
 }
 
 input[type="number"]:invalid,
@@ -302,9 +301,9 @@ input[type="checkbox"]:focus-visible {
 }
 
 .btn-save:hover {
-  background: #2563eb;
+  background: #0D9488;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
 }
 
 .btn-save:active {
@@ -313,7 +312,7 @@ input[type="checkbox"]:focus-visible {
 
 .btn-save:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.4);
 }
 
 /* Success message */

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SnapSite",
-  "version": "2.1.0",
+  "version": "1.0",
   "description": "Save webpages offline with full source code & assets. Works on Chrome, Firefox, Edge, Safari, Opera, and Brave.",
 
   "permissions": [

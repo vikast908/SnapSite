@@ -35,7 +35,6 @@ body {
 .popup-header .logo {
   width: 24px;
   height: 24px;
-  color: var(--ui-accent);
 }
 
 .popup-header .brand-name {
@@ -102,17 +101,17 @@ body {
 
 .mode-selector .mode-btn:hover {
   color: var(--ui-text);
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(20, 184, 166, 0.08);
 }
 
 .mode-selector .mode-btn.selected {
   background: var(--ui-accent);
   color: white;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.35);
 }
 
 .mode-selector .mode-btn.selected:hover {
-  background: #2563eb;
+  background: #0D9488;
 }
 
 .mode-selector .mode-btn svg {
@@ -157,7 +156,7 @@ body {
 .crawl-options input[type="number"]:focus {
   outline: none;
   border-color: var(--ui-accent);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.15);
 }
 
 /* Action Button */
@@ -179,9 +178,9 @@ body {
 }
 
 .action-btn.primary:hover {
-  background: #2563eb;
+  background: #0D9488;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
 }
 
 .action-btn.primary:active {
@@ -190,7 +189,7 @@ body {
 
 .action-btn.primary:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.4);
 }
 
 .action-btn.danger {
@@ -232,7 +231,7 @@ body {
 .progress-bar .bar {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--ui-accent), var(--ui-accent-2));
+  background: var(--ui-gradient);
   border-radius: 3px;
   transition: width 0.2s ease-out;
 }

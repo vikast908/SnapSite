@@ -1,4 +1,4 @@
-# SnapSite v2.1 - Cross-Browser Extension (MV3)
+# SnapSite
 
 **Save webpages offline with full source code & assets.** Snapshot any page with pixel-perfect accuracy or crawl multiple pages into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, forms, tables, and more.
 
@@ -6,7 +6,7 @@
 
 **99%+ Site Compatibility** - Landing pages, web apps, documentation, e-commerce, news sites, and complex SPAs.
 
-## What's New in v2.1
+## Features
 
 ### Cross-Browser Support
 - **Chrome, Edge, Opera, Brave**: Full support via Chromium APIs
@@ -108,8 +108,6 @@
 - **Audio elements**: Full audio file capture
 - **All font variants**: Every weight, style, and format
 - **Icon fonts**: FontAwesome, Material Icons fully captured
-
-## What's New in v2.0
 
 ### Multi-Page Site Crawling
 - **Crawl entire websites** with the new "Crawl site" mode
@@ -315,61 +313,3 @@ SnapSite detects and notes the presence of:
 - For crawls, progress shows "X/Y pages" with real-time updates
 - In-page overlay shows status with a Stop button during capture
 
-## Changelog
-
-### v2.1.0 (Latest)
-**Modern Web Compatibility Release**
-
-#### New Features
-- **12 CSS @-rules supported**: @container, @layer, @scope, @supports, @media print, @scroll-timeline, @counter-style, @page, @font-feature-values (plus existing @keyframes, @property, @font-face)
-- **Shadow DOM support**: Recursive traversal of open shadow roots
-- **Form state preservation**: All input types, textareas, selects, contenteditable
-- **HTML5 elements**: dialog, details, progress, meter, output, datalist, template
-- **Popover API**: [popover] attribute support
-- **Cross-origin iframe placeholders**: YouTube/Vimeo thumbnails, PDF fallbacks
-- **ARIA preservation**: expanded, selected, checked, hidden states
-- **Clip-path/mask URLs**: External SVG references captured
-- **Noscript content**: Made visible for offline viewing
-- **Color scheme**: theme-color meta and prefers-color-scheme preserved
-- **Table enhancement**: Sticky headers, virtualized table support
-- **Image maps**: map/area coordinate preservation
-- **Inert attribute**: Non-interactive regions marked
-- **Declarative Shadow DOM**: template[shadowroot] support
-
-#### Improvements
-- **UTF-8 encoding fix**: Charset meta injection prevents garbled characters
-- **Enhanced lazy loading**: Native lazy attribute removal, IntersectionObserver trigger
-- **Better srcset/picture**: Full responsive image support with AVIF/WebP
-- **Optimized clip-path check**: Targeted element selection instead of all elements
-
-#### Cross-Browser
-- **Chrome, Edge, Opera, Brave**: Full support via Chromium APIs
-- **Firefox**: Native browser.* API support with MV3
-- **Safari**: WebExtension support (macOS 12+, iOS 15.4+)
-
-#### Performance
-- **Smart filtering**: 40+ tracking/analytics script patterns skipped
-- **10s timeout per asset** (was 30s), 15s hard limit
-- **50k max assets**, 25 concurrent downloads
-- **500KB embed threshold** (was 100KB)
-
-### v2.0.0
-- Added multi-page site crawling with same-domain scope
-- Added CSS hover/focus/active state capture
-- Added JS animation library detection (GSAP, Anime.js, Framer Motion, Lottie)
-- Added scroll-triggered animation capture
-- Added multi-frame canvas capture
-- Added CSS-in-JS extraction (styled-components, Emotion, Linaria, JSS)
-- Added SHA-256 asset deduplication
-- Added video poster extraction
-- Increased concurrency to 15 (was 6)
-- Increased max assets to 2000 (was 500)
-- Added URL normalization (strips tracking params)
-- Added memory usage warnings
-- New popup UI with mode selector
-
-### v1.x
-- Single page capture
-- Basic animation support
-- Carousel expansion
-- Asset downloading with concurrency
