@@ -20,6 +20,8 @@ build/
 claude.md
 CLAUDE.md
 
-# Branding assets (local only)
-branding/
+# Branding dev files (keep JPGs for store)
+branding/*.html
+branding/*.js
+branding/*.png
 

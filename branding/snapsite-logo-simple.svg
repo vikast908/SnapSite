@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="#14B8A6"/>
+
+  <!-- Capture brackets -->
+  <path d="M96 160 V120 Q96 96 120 96 H160" stroke="white" stroke-width="20" stroke-linecap="round"/>
+  <path d="M416 160 V120 Q416 96 392 96 H352" stroke="white" stroke-width="20" stroke-linecap="round"/>
+  <path d="M96 352 V392 Q96 416 120 416 H160" stroke="white" stroke-width="20" stroke-linecap="round"/>
+  <path d="M416 352 V392 Q416 416 392 416 H352" stroke="white" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- Webpage -->
+  <rect x="156" y="136" width="200" height="240" rx="24" fill="white"/>
+
+  <!-- macOS window dots -->
+  <circle cx="186" cy="166" r="8" fill="#FF5F57"/>
+  <circle cx="210" cy="166" r="8" fill="#FFBD2E"/>
+  <circle cx="234" cy="166" r="8" fill="#28C840"/>
+
+  <!-- Download icon (floating) -->
+  <g transform="translate(256, 360)">
+    <path d="M0 -48 V-12" stroke="white" stroke-width="12" stroke-linecap="round"/>
+    <path d="M-18 -28 L0 -8 L18 -28" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="-32" y="0" width="64" height="10" rx="5" fill="white"/>
+  </g>
+</svg>

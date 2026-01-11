@@ -4,11 +4,11 @@
   // Cross-browser compatibility
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
   const KEY = 'snapsiteTheme'; // 'light' | 'dark'
-  let current = 'light';
+  let current = 'dark';
 
   function effective(mode){
-    if (mode === 'dark') return 'dark';
-    return 'light'; // Default to light
+    if (mode === 'light') return 'light';
+    return 'dark'; // Default to dark
   }
 
   function apply(mode){
@@ -25,11 +25,11 @@
     try {
       browserAPI.storage?.sync?.get(KEY, (obj) => {
         const v = obj && obj[KEY];
-        const mode = (v === 'dark') ? 'dark' : 'light';
+        const mode = (v === 'light') ? 'light' : 'dark';
         cb(mode);
       });
     } catch {
-      cb('light');
+      cb('dark');
     }
   }
 

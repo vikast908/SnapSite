@@ -17,17 +17,17 @@ html, html[data-theme="light"]{
 
 /* Dark theme */
 html[data-theme="dark"]{
-  --ui-bg: #000000;
-  --ui-surface: rgba(255,255,255,0.03);
-  --ui-stroke: rgba(255,255,255,0.15);
+  --ui-bg: #1a2332;
+  --ui-surface: #0d1520;
+  --ui-stroke: rgba(255,255,255,0.1);
   --ui-text: #ffffff;
-  --ui-subtle: #a8b3cf;
-  --ui-accent: #2DD4BF;
-  --ui-accent-mid: #14B8A6;
-  --ui-accent-2: #0D9488;
-  --ui-gradient: linear-gradient(90deg, #2DD4BF, #14B8A6, #0D9488);
+  --ui-subtle: #8892a2;
+  --ui-accent: #14B8A6;
+  --ui-accent-mid: #0D9488;
+  --ui-accent-2: #0F766E;
+  --ui-gradient: linear-gradient(90deg, #14B8A6, #2DD4BF);
   --ui-shadow: 0 12px 32px rgba(0,0,0,0.6);
-  --ui-muted-surface: rgba(255,255,255,0.05);
+  --ui-muted-surface: #0d1520;
 }
 
 /* Base page */

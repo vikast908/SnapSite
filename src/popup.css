@@ -105,13 +105,13 @@ body {
 }
 
 .mode-selector .mode-btn.selected {
-  background: var(--ui-accent);
-  color: white;
-  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.35);
+  background: rgba(20, 184, 166, 0.15);
+  color: #2DD4BF;
+  border: 1px solid rgba(20, 184, 166, 0.4);
 }
 
 .mode-selector .mode-btn.selected:hover {
-  background: #0D9488;
+  background: rgba(20, 184, 166, 0.2);
 }
 
 .mode-selector .mode-btn svg {
@@ -221,9 +221,10 @@ body {
 }
 
 .progress-bar {
-  height: 6px;
+  height: 8px;
   background: var(--ui-muted-surface);
-  border-radius: 3px;
+  border: 1px solid var(--ui-stroke);
+  border-radius: 99px;
   overflow: hidden;
   margin-bottom: 8px;
 }

@@ -6,6 +6,8 @@
 
 **99%+ Site Compatibility** - Landing pages, web apps, documentation, e-commerce, news sites, and complex SPAs.
 
+![SnapSite Screenshot](branding/screenshot-1-capture.jpg)
+
 ## Features
 
 ### Cross-Browser Support

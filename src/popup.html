@@ -1,13 +1,20 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="dark">
 <head>
   <meta charset="utf-8">
   <script>
-    // Apply theme immediately before CSS loads
+    // Apply theme - default to dark, migrate existing users
     (function() {
       const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-      browserAPI.storage.sync.get(['snapsiteTheme'], function(result) {
-        document.documentElement.setAttribute('data-theme', result.snapsiteTheme === 'dark' ? 'dark' : 'light');
+      browserAPI.storage.sync.get(['snapsiteTheme', 'themeMigrated'], function(result) {
+        // One-time migration: switch to dark if not yet migrated
+        if (!result.themeMigrated) {
+          browserAPI.storage.sync.set({ snapsiteTheme: 'dark', themeMigrated: true });
+          return; // Already dark from HTML
+        }
+        if (result.snapsiteTheme === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
       });
     })();
   </script>
