@@ -417,51 +417,35 @@ browserAPI.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep channel open for async responses
 });
 
-// Theme management
-let currentTheme = 'auto';
+// Theme management - only light and dark
+let currentTheme = 'light';
 
 // Update theme icon based on current theme
 function updateThemeIcon(theme) {
   const sunIcon = `<circle cx="12" cy="12" r="5"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m5.08-5.08l4.24-4.24"/>`;
   const moonIcon = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
-  const autoIcon = `<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/>`;
 
-  if (theme === 'light') {
+  if (theme === 'dark') {
+    themeIcon.innerHTML = moonIcon;
+    themeToggle.title = 'Switch to Light Theme';
+  } else {
     themeIcon.innerHTML = sunIcon;
     themeToggle.title = 'Switch to Dark Theme';
-  } else if (theme === 'dark') {
-    themeIcon.innerHTML = moonIcon;
-    themeToggle.title = 'Switch to Auto Theme';
-  } else {
-    themeIcon.innerHTML = autoIcon;
-    themeToggle.title = 'Switch to Light Theme';
   }
 }
 
 // Apply theme to popup
 function applyTheme(theme) {
-  currentTheme = theme;
-  const html = document.documentElement;
-
-  // Remove existing theme attributes
-  html.removeAttribute('data-theme');
-
-  if (theme === 'light') {
-    html.setAttribute('data-theme', 'light');
-  } else if (theme === 'dark') {
-    html.setAttribute('data-theme', 'dark');
-  }
-  // For 'auto', we don't set data-theme, so it uses system preference
-
-  updateThemeIcon(theme);
-
-  // Save theme
-  browserAPI.storage.sync.set({ getinspireTheme: theme });
+  const effectiveTheme = (theme === 'dark') ? 'dark' : 'light';
+  currentTheme = effectiveTheme;
+  document.documentElement.setAttribute('data-theme', effectiveTheme);
+  updateThemeIcon(effectiveTheme);
+  browserAPI.storage.sync.set({ getinspireTheme: effectiveTheme });
 }
 
-// Cycle through themes: auto -> light -> dark -> auto
+// Toggle between light and dark
 function cycleTheme() {
-  const nextTheme = currentTheme === 'auto' ? 'light' : (currentTheme === 'light' ? 'dark' : 'auto');
+  const nextTheme = (currentTheme === 'dark') ? 'light' : 'dark';
   applyTheme(nextTheme);
 
   // Add animation feedback
@@ -473,8 +457,10 @@ function cycleTheme() {
 
 // Load initial theme
 browserAPI.storage.sync.get(['getinspireTheme'], (result) => {
-  const theme = result.getinspireTheme || 'auto';
-  applyTheme(theme);
+  const theme = (result.getinspireTheme === 'dark') ? 'dark' : 'light';
+  currentTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeIcon(theme);
 });
 
 // Theme toggle event
