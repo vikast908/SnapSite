@@ -3,59 +3,38 @@
 (function(){
   // Cross-browser compatibility
   const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
-  const KEY = 'getinspireTheme'; // 'auto' | 'light' | 'dark'
-  let current = 'auto';
-  let mql = null;
+  const KEY = 'getinspireTheme'; // 'light' | 'dark'
+  let current = 'light';
 
   function effective(mode){
     if (mode === 'dark') return 'dark';
-    if (mode === 'light') return 'light';
-    try { return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
-    catch { return 'light'; }
+    return 'light'; // Default to light
   }
 
   function apply(mode){
     const eff = effective(mode);
     const root = document.documentElement;
     if (!root) return;
-    if (mode === 'auto') {
-      root.removeAttribute('data-theme');
-    } else {
-      root.setAttribute('data-theme', eff);
-    }
-    // Always set an effective attribute for CSS targeting convenience
-    root.setAttribute('data-theme-effective', eff);
+    root.setAttribute('data-theme', eff);
     current = mode;
     try { updateActionIcon(eff); } catch {}
   }
 
-  function onMqlChange(){
-    if (current === 'auto') apply('auto');
-  }
-
-  function attachMql(){
-    try {
-      if (!window.matchMedia) return;
-      if (mql) { mql.removeEventListener?.('change', onMqlChange); mql = null; }
-      mql = window.matchMedia('(prefers-color-scheme: dark)');
-      mql.addEventListener?.('change', onMqlChange);
-    } catch {}
-  }
 
   function get(cb){
     try {
       browserAPI.storage?.sync?.get(KEY, (obj) => {
         const v = obj && obj[KEY];
-        const mode = (v === 'light' || v === 'dark' || v === 'auto') ? v : 'auto';
+        const mode = (v === 'dark') ? 'dark' : 'light';
         cb(mode);
       });
     } catch {
-      cb('auto');
+      cb('light');
     }
   }
 
   function set(mode, cb){
-    const v = (mode === 'light' || mode === 'dark') ? mode : 'auto';
+    const v = (mode === 'dark') ? 'dark' : 'light';
     try {
       browserAPI.storage?.sync?.set({ [KEY]: v }, () => {
         apply(v);
@@ -69,13 +48,12 @@
 
   function cycle(cb){
     get((mode) => {
-      const next = mode === 'auto' ? 'dark' : (mode === 'dark' ? 'light' : 'auto');
+      const next = (mode === 'dark') ? 'light' : 'dark';
       set(next, cb);
     });
   }
 
   function init(){
-    attachMql();
     get((mode) => { apply(mode); });
   }
 

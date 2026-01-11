@@ -4,34 +4,8 @@
   <meta charset="utf-8">
   <link rel="stylesheet" href="ui.css">
   <style>
-    /* Theme variables - Light (default) */
-    :root {
-      --gi-bg: #ffffff;
-      --gi-text: #0f172a;
-      --gi-subtle: #64748b;
-      --gi-stroke: rgba(0, 0, 0, 0.08);
-      --gi-accent: #3b82f6;
-      --gi-button-bg: rgba(255, 255, 255, 0.6);
-      --gi-button-hover: rgba(59, 130, 246, 0.1);
-      --gi-panel-bg: rgba(255, 255, 255, 0.4);
-    }
-
-    /* Dark theme */
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --gi-bg: #000000;
-        --gi-text: #ffffff;
-        --gi-subtle: #d1d5db;
-        --gi-stroke: rgba(255, 255, 255, 0.2);
-        --gi-accent: #60a5fa;
-        --gi-button-bg: rgba(255, 255, 255, 0.12);
-        --gi-button-hover: rgba(96, 165, 250, 0.25);
-        --gi-panel-bg: rgba(255, 255, 255, 0.08);
-      }
-    }
-
-    /* Explicit theme overrides */
-    html[data-theme="light"] {
+    /* Theme variables - Light */
+    html, html[data-theme="light"] {
       --gi-bg: #ffffff;
       --gi-text: #0f172a;
       --gi-subtle: #64748b;
@@ -125,12 +99,6 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
     }
 
-    @media (prefers-color-scheme: dark) {
-      .gi .icon-btn {
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-      }
-    }
-
     .gi button {
       appearance: none;
       border: 1px solid var(--gi-stroke);
@@ -167,13 +135,6 @@
     html[data-theme="dark"] .gi #startBtn {
       background: linear-gradient(180deg, rgba(96, 165, 250, 0.25), rgba(96, 165, 250, 0.12));
       border-color: rgba(96, 165, 250, 0.5);
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .gi #startBtn {
-        background: linear-gradient(180deg, rgba(96, 165, 250, 0.25), rgba(96, 165, 250, 0.12));
-        border-color: rgba(96, 165, 250, 0.5);
-      }
     }
 
     .gi #startBtn:hover {
@@ -307,12 +268,6 @@
 
     html[data-theme="dark"] .gi .mode-btn.selected {
       box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .gi .mode-btn.selected {
-        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
-      }
     }
 
     /* Crawl options (v2.0) */
