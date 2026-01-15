@@ -2,7 +2,7 @@
 
 **Save webpages offline with full source code & assets.** Snapshot any page with pixel-perfect accuracy or crawl multiple pages into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, forms, tables, and more.
 
-**Works on all major browsers** including Chromium-based browsers, Firefox, and Safari.
+**Works on all major browsers.**
 
 **99%+ Site Compatibility** - Landing pages, web apps, documentation, e-commerce, news sites, and complex SPAs.
 
@@ -11,10 +11,9 @@
 ## Features
 
 ### Cross-Browser Support
-- **Chromium-based**: Full support via modern extension APIs
-- **Firefox**: Native browser.* API support with MV3
-- **Safari**: WebExtension support (macOS 12+, iOS 15.4+)
-- **Unified codebase**: Single extension works across all major browsers
+- Full support via modern extension APIs (Manifest V3)
+- Native WebExtension support across all platforms
+- Unified codebase works on all major desktop browsers
 
 ### Modern CSS Support (12 @-rules)
 - **@container**: Container queries for responsive components
@@ -137,21 +136,10 @@
 
 ## Install
 
-### Chromium-based (Chrome, Edge, etc.)
 1. Download or clone this repository
-2. Open `chrome://extensions` (or equivalent), enable Developer mode
-3. Click "Load unpacked" and select the `SnapSite/` folder
-4. Pin SnapSite in the toolbar
-
-### Firefox
-1. Open `about:debugging#/runtime/this-firefox`
-2. Click "Load Temporary Add-on"
-3. Select the `manifest.json` file from the `SnapSite/` folder
-
-### Safari (macOS)
-1. Enable "Allow unsigned extensions" in Safari's Develop menu
-2. Open Safari > Settings > Extensions
-3. Enable SnapSite
+2. Open your browser's extension management page and enable Developer mode
+3. Click "Load unpacked" (or equivalent) and select the `SnapSite/` folder
+4. Pin SnapSite in the toolbar for easy access
 
 ## Use
 
@@ -296,13 +284,9 @@ SnapSite detects and notes the presence of:
 - `host_permissions: <all_urls>` enables cross-origin asset fetching
 - Core actions (injecting on the active tab, downloads, storage) work with standard permissions
 
-## Browser Compatibility
+## Compatibility
 
-| Platform | Minimum Version | Status |
-|----------|-----------------|--------|
-| Chromium-based | 88+ | Full support |
-| Firefox | 109+ | Full support |
-| Safari | 15.4+ | Full support |
+Works on all major desktop browsers with modern extension API support (Manifest V3).
 
 ## Notes
 - Third-party iframes show placeholders with links to original content
