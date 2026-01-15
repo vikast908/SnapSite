@@ -4,7 +4,7 @@
 
 ## Overview
 
-SnapSite is a cross-browser extension that saves web pages and entire websites as offline ZIP files. It works on Chrome, Firefox, Edge, Safari, Opera, and Brave. This privacy policy explains how the extension handles your data.
+SnapSite is a cross-browser extension that saves web pages and entire websites as offline ZIP files. It works on all major browsers. This privacy policy explains how the extension handles your data.
 
 ## Data Collection
 
@@ -60,7 +60,7 @@ SnapSite does not use any third-party services, analytics, or tracking tools.
 
 ## Cross-Browser Support
 
-This extension works on multiple browsers (Chrome, Firefox, Edge, Safari, Opera, Brave). The same privacy policy applies regardless of which browser you use. No browser-specific data is collected.
+This extension works on multiple browsers. The same privacy policy applies regardless of which browser you use. No browser-specific data is collected.
 
 ## Data Security
 

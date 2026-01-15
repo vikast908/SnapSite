@@ -2,7 +2,7 @@
 
 **Save webpages offline with full source code & assets.** Snapshot any page with pixel-perfect accuracy or crawl multiple pages into offline-ready ZIP files. Captures everything: images, fonts, SVGs, videos, CSS, animations, forms, tables, and more.
 
-**Works on:** Chrome, Firefox, Edge, Safari, Opera, and Brave.
+**Works on all major browsers** including Chromium-based browsers, Firefox, and Safari.
 
 **99%+ Site Compatibility** - Landing pages, web apps, documentation, e-commerce, news sites, and complex SPAs.
 
@@ -11,10 +11,10 @@
 ## Features
 
 ### Cross-Browser Support
-- **Chrome, Edge, Opera, Brave**: Full support via Chromium APIs
+- **Chromium-based**: Full support via modern extension APIs
 - **Firefox**: Native browser.* API support with MV3
 - **Safari**: WebExtension support (macOS 12+, iOS 15.4+)
-- **Unified codebase**: Single extension works across all browsers
+- **Unified codebase**: Single extension works across all major browsers
 
 ### Modern CSS Support (12 @-rules)
 - **@container**: Container queries for responsive components
@@ -137,7 +137,7 @@
 
 ## Install
 
-### Chrome / Edge / Opera / Brave
+### Chromium-based (Chrome, Edge, etc.)
 1. Download or clone this repository
 2. Open `chrome://extensions` (or equivalent), enable Developer mode
 3. Click "Load unpacked" and select the `SnapSite/` folder
@@ -298,14 +298,11 @@ SnapSite detects and notes the presence of:
 
 ## Browser Compatibility
 
-| Browser | Version | Status |
-|---------|---------|--------|
-| Chrome | 88+ | Full support |
-| Edge | 88+ | Full support |
+| Platform | Minimum Version | Status |
+|----------|-----------------|--------|
+| Chromium-based | 88+ | Full support |
 | Firefox | 109+ | Full support |
 | Safari | 15.4+ | Full support |
-| Opera | 74+ | Full support |
-| Brave | Latest | Full support |
 
 ## Notes
 - Third-party iframes show placeholders with links to original content
